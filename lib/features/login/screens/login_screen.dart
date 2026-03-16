@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
-import '../theme/colors.dart';
-import '../widgets/custom_text_field.dart';
-import 'reset_password_screen.dart';
+import '../../../theme/colors.dart';
+import '../../../shared/widgets/custom_text_field.dart';
+import '../../reset_password/screens/reset_password_screen.dart';
+import '../../dashboard/screens/dashboard_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({Key? key}) : super(key: key);
@@ -227,10 +228,9 @@ class _LoginScreenState extends State<LoginScreen> {
                                     onTap: () {
                                       if (_formKey.currentState?.validate() ??
                                           false) {
-                                        ScaffoldMessenger.of(context)
-                                            .showSnackBar(
-                                          const SnackBar(
-                                            content: Text('Signing in...'),
+                                        Navigator.of(context).pushReplacement(
+                                          MaterialPageRoute(
+                                            builder: (context) => const DashboardScreen(),
                                           ),
                                         );
                                       }

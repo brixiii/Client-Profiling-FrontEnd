@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import '../theme/colors.dart';
-import '../widgets/custom_text_field.dart';
-import 'enter_otp_screen.dart';
+import '../../../theme/colors.dart';
+import '../../../shared/widgets/custom_text_field.dart';
+import '../../enter_otp/screens/enter_otp_screen.dart';
 
 class ResetPasswordScreen extends StatefulWidget {
   const ResetPasswordScreen({Key? key}) : super(key: key);

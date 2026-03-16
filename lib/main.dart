@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'screens/login_screen.dart';
+import 'features/login/screens/login_screen.dart';
 import 'theme/colors.dart';
 
 void main() {

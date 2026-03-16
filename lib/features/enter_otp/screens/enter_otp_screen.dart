@@ -1,28 +1,27 @@
 import 'package:flutter/material.dart';
-import '../theme/colors.dart';
-import '../widgets/custom_text_field.dart';
+import '../../../theme/colors.dart';
+import '../../../shared/widgets/custom_text_field.dart';
+import '../../new_password/screens/new_password_screen.dart';
 
-class NewPasswordScreen extends StatefulWidget {
+class EnterOtpScreen extends StatefulWidget {
   final String email;
 
-  const NewPasswordScreen({
+  const EnterOtpScreen({
     Key? key,
     required this.email,
   }) : super(key: key);
 
   @override
-  State<NewPasswordScreen> createState() => _NewPasswordScreenState();
+  State<EnterOtpScreen> createState() => _EnterOtpScreenState();
 }
 
-class _NewPasswordScreenState extends State<NewPasswordScreen> {
-  final _passwordController = TextEditingController();
-  final _confirmPasswordController = TextEditingController();
+class _EnterOtpScreenState extends State<EnterOtpScreen> {
+  final _otpController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
 
   @override
   void dispose() {
-    _passwordController.dispose();
-    _confirmPasswordController.dispose();
+    _otpController.dispose();
     super.dispose();
   }
 
@@ -38,7 +37,7 @@ class _NewPasswordScreenState extends State<NewPasswordScreen> {
             height: screenHeight - MediaQuery.of(context).padding.top,
             child: Column(
               children: [
-                // New Password card
+                // Enter OTP card
                 Expanded(
                   child: Center(
                     child: SingleChildScrollView(
@@ -68,7 +67,7 @@ class _NewPasswordScreenState extends State<NewPasswordScreen> {
                             children: [
                               // Title
                               const Text(
-                                'Enter new Password',
+                                'Enter OTP',
                                 style: TextStyle(
                                   fontSize: 26,
                                   fontWeight: FontWeight.w700,
@@ -76,37 +75,31 @@ class _NewPasswordScreenState extends State<NewPasswordScreen> {
                                   letterSpacing: -0.3,
                                 ),
                               ),
+                              const SizedBox(height: 24),
+
+                              // Info text
+                              Text(
+                                'A 6-digit code has been sent to ${widget.email}',
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  color: AppColors.textSecondary,
+                                  fontWeight: FontWeight.w400,
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
                               const SizedBox(height: 32),
 
-                              // New Password field
+                              // OTP field
                               CustomTextField(
-                                hintText: 'New Password',
-                                icon: Icons.lock_outline,
-                                isPassword: true,
-                                controller: _passwordController,
+                                hintText: 'Enter OTP sent',
+                                icon: Icons.mail_outline,
+                                controller: _otpController,
                                 validator: (value) {
                                   if (value?.isEmpty ?? true) {
-                                    return 'Password is required';
+                                    return 'OTP is required';
                                   }
-                                  if (value!.length < 8) {
-                                    return 'Password must be at least 8 characters';
-                                  }
-                                  return null;
-                                },
-                              ),
-
-                              // Confirm Password field
-                              CustomTextField(
-                                hintText: 'Confirm New Password',
-                                icon: Icons.lock_outline,
-                                isPassword: true,
-                                controller: _confirmPasswordController,
-                                validator: (value) {
-                                  if (value?.isEmpty ?? true) {
-                                    return 'Please confirm your password';
-                                  }
-                                  if (value != _passwordController.text) {
-                                    return 'Passwords do not match';
+                                  if (value!.length < 6) {
+                                    return 'OTP must be 6 digits';
                                   }
                                   return null;
                                 },
@@ -158,21 +151,13 @@ class _NewPasswordScreenState extends State<NewPasswordScreen> {
                                     onTap: () {
                                       if (_formKey.currentState?.validate() ??
                                           false) {
-                                        ScaffoldMessenger.of(context)
-                                            .showSnackBar(
-                                          const SnackBar(
-                                            content: Text(
-                                                'Password reset successfully!'),
+                                        Navigator.of(context).push(
+                                          MaterialPageRoute(
+                                            builder: (context) =>
+                                                NewPasswordScreen(
+                                              email: widget.email,
+                                            ),
                                           ),
-                                        );
-                                        // Navigate back to login after successful reset
-                                        Future.delayed(
-                                          const Duration(seconds: 1),
-                                          () {
-                                            Navigator.of(context)
-                                                .popUntil((route) => route
-                                                    .isFirst);
-                                          },
                                         );
                                       }
                                     },
@@ -200,6 +185,40 @@ class _NewPasswordScreenState extends State<NewPasswordScreen> {
                                     ),
                                   ),
                                 ),
+                              ),
+
+                              const SizedBox(height: 16),
+
+                              // Resend OTP link
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  const Text(
+                                    "Didn't receive code? ",
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: AppColors.textSecondary,
+                                    ),
+                                  ),
+                                  GestureDetector(
+                                    onTap: () {
+                                      ScaffoldMessenger.of(context)
+                                          .showSnackBar(
+                                        const SnackBar(
+                                          content: Text('OTP resent to email'),
+                                        ),
+                                      );
+                                    },
+                                    child: const Text(
+                                      'Resend',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: AppColors.link,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ),
+                                ],
                               ),
                             ],
                           ),

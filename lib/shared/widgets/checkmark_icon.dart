@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../theme/colors.dart';
+import '../../theme/colors.dart';
 
 /// Custom painted checkmark icon with document style
 class CheckmarkIcon extends StatelessWidget {
