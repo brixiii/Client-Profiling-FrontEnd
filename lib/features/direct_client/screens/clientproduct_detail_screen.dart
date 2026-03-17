@@ -1,4 +1,7 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
+import '../../../shared/widgets/custom_app_bar.dart';
+import 'edit_shop_screen.dart';
+import 'screens/add_client/add_buttons_screen.dart';
 
 class ClientDetailScreen extends StatelessWidget {
   final Map<String, String> client;
@@ -19,25 +22,11 @@ class ClientDetailScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.grey[100],
-      appBar: AppBar(
-        backgroundColor: const Color(0xFF87CEEB),
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.white),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: const Text(
-          'Direct Client',
-          style: TextStyle(
-            color: Colors.white,
-            fontSize: 18,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        centerTitle: true,
+      appBar: CustomAppBar(
+        title: 'Direct Client',
         actions: [
           IconButton(
-            icon: const Icon(Icons.account_circle_outlined, color: Colors.white),
+            icon: const Icon(Icons.account_circle_outlined, color: Colors.black87),
             onPressed: () {},
           ),
         ],
@@ -50,21 +39,21 @@ class ClientDetailScreen extends StatelessWidget {
             // ── Shop Details ──────────────────────────────────────────
             _buildSectionHeader('Shop Details'),
             const SizedBox(height: 8),
-            _buildShopDetailsCard(),
+            _buildShopDetailsCard(context),
 
             const SizedBox(height: 20),
 
             // ── Product Details ───────────────────────────────────────
             _buildSectionHeader('Product Details'),
             const SizedBox(height: 8),
-            _buildProductsCard(),
+            _buildProductsCard(context),
 
             const SizedBox(height: 20),
 
             // ── Services ─────────────────────────────────────────────
             _buildSectionHeader('Services'),
             const SizedBox(height: 8),
-            _buildServicesCard(),
+            _buildServicesCard(context),
 
             const SizedBox(height: 24),
           ],
@@ -86,7 +75,7 @@ class ClientDetailScreen extends StatelessWidget {
   }
 
   // ── Shop details card ───────────────────────────────────────────────────
-  Widget _buildShopDetailsCard() {
+  Widget _buildShopDetailsCard(BuildContext context) {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(16),
@@ -124,30 +113,59 @@ class ClientDetailScreen extends StatelessWidget {
           // Edit and Delete action buttons
           Row(
             children: [
-              ElevatedButton(
-                onPressed: () {
-                  // TODO: implement edit
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF2563EB),
-                  shape: const CircleBorder(),
-                  padding: const EdgeInsets.all(12),
-                  elevation: 0,
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => EditShopScreen(client: client),
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.edit, color: Colors.white, size: 18),
+                  label: const Text(
+                    'Edit',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 15,
+                    ),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF2563EB),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(30),
+                    ),
+                    elevation: 0,
+                  ),
                 ),
-                child: const Icon(Icons.edit, color: Colors.white, size: 18),
               ),
-              const SizedBox(width: 8),
-              ElevatedButton(
-                onPressed: () {
-                  // TODO: implement delete
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFEF4444),
-                  shape: const CircleBorder(),
-                  padding: const EdgeInsets.all(12),
-                  elevation: 0,
+              const SizedBox(width: 12),
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: () {
+                    // TODO: implement delete
+                  },
+                  icon: const Icon(Icons.delete, color: Colors.white, size: 18),
+                  label: const Text(
+                    'Delete',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 15,
+                    ),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFEF4444),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(30),
+                    ),
+                    elevation: 0,
+                  ),
                 ),
-                child: const Icon(Icons.delete, color: Colors.white, size: 18),
               ),
             ],
           ),
@@ -157,7 +175,7 @@ class ClientDetailScreen extends StatelessWidget {
   }
 
   // ── Product details card ────────────────────────────────────────────────
-  Widget _buildProductsCard() {
+  Widget _buildProductsCard(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
@@ -184,7 +202,14 @@ class ClientDetailScreen extends StatelessWidget {
                 const SizedBox(width: 8),
                 ElevatedButton.icon(
                   onPressed: () {
-                    // TODO: implement add product
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const AddButtonsScreen(
+                          mode: AddMode.product,
+                        ),
+                      ),
+                    );
                   },
                   icon: const Icon(Icons.add, size: 16),
                   label: const Text(
@@ -222,7 +247,7 @@ class ClientDetailScreen extends StatelessWidget {
   }
 
   // ── Services card ───────────────────────────────────────────────────────
-  Widget _buildServicesCard() {
+  Widget _buildServicesCard(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
@@ -249,7 +274,14 @@ class ClientDetailScreen extends StatelessWidget {
                 const SizedBox(width: 8),
                 ElevatedButton.icon(
                   onPressed: () {
-                    // TODO: implement add service
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const AddButtonsScreen(
+                          mode: AddMode.service,
+                        ),
+                      ),
+                    );
                   },
                   icon: const Icon(Icons.add, size: 16),
                   label: const Text(

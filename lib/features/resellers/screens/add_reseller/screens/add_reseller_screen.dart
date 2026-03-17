@@ -1,4 +1,5 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
+import '../../../../../../shared/widgets/custom_app_bar.dart';
 
 class AddResellerScreen extends StatefulWidget {
   const AddResellerScreen({Key? key}) : super(key: key);
@@ -168,24 +169,8 @@ class _AddResellerScreenState extends State<AddResellerScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-      appBar: AppBar(
-        backgroundColor: const Color(0xFF87CEEB),
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded,
-              color: Colors.white, size: 20),
-          onPressed: () => Navigator.of(context).pop(),
-        ),
-        title: const Text(
-          'Add Reseller',
-          style: TextStyle(
-            color: Colors.white,
-            fontSize: 18,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        centerTitle: true,
-        // Step badge in actions
+      appBar: CustomAppBar(
+        title: 'Add Reseller',
         actions: [
           Padding(
             padding: const EdgeInsets.only(right: 16),
@@ -194,16 +179,16 @@ class _AddResellerScreenState extends State<AddResellerScreen> {
                 padding:
                     const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.22),
+                  color: const Color(0xFF2563EB).withOpacity(0.12),
                   borderRadius: BorderRadius.circular(20),
                   border: Border.all(
-                      color: Colors.white.withOpacity(0.55)),
+                      color: const Color(0xFF2563EB).withOpacity(0.4)),
                 ),
                 child: Text(
                   'Step ${_currentStep + 1} of 4',
                   style: const TextStyle(
                     fontSize: 12,
-                    color: Colors.white,
+                    color: Color(0xFF2563EB),
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -221,55 +206,75 @@ class _AddResellerScreenState extends State<AddResellerScreen> {
             children: [
               // ── Step content card ──────────────────────────────────
               Expanded(
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Vertical stepper rail
-                    Column(
-                      children: [
-                        _buildStepDot(0),
-                        _buildConnector(0),
-                        _buildStepDot(1),
-                        _buildConnector(1),
-                        _buildStepDot(2),
-                        _buildConnector(2),
-                        _buildStepDot(3),
-                      ],
-                    ),
-                    const SizedBox(width: 20),
-
-                    // Form area
-                    Expanded(
-                      child: SingleChildScrollView(
-                        child: Column(
+                child: SingleChildScrollView(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: List.generate(4, (step) {
+                      final bool isActive = step == _currentStep;
+                      final bool isLast = step == 3;
+                      return IntrinsicHeight(
+                        child: Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            // Step heading
-                            Text(
-                              _stepTitles[_currentStep],
-                              style: const TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.w700,
-                                color: Colors.black87,
+                            // Left: circle + connector stretching to row height
+                            SizedBox(
+                              width: 30,
+                              child: Column(
+                                children: [
+                                  _buildStepDot(step),
+                                  if (!isLast)
+                                    Expanded(
+                                      child: Center(
+                                        child: Container(
+                                          width: 2,
+                                          color: step < _currentStep
+                                              ? const Color(0xFF2563EB)
+                                              : Colors.grey[300],
+                                        ),
+                                      ),
+                                    ),
+                                ],
                               ),
                             ),
-                            const SizedBox(height: 4),
-                            Text(
-                              _stepSubtitles[_currentStep],
-                              style: TextStyle(
-                                fontSize: 13,
-                                color: Colors.grey[500],
+                            const SizedBox(width: 20),
+                            // Right: form content when active, spacer otherwise
+                            Expanded(
+                              child: Padding(
+                                padding: EdgeInsets.only(bottom: isLast ? 0 : 8),
+                                child: isActive
+                                    ? Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            _stepTitles[step],
+                                            style: const TextStyle(
+                                              fontSize: 18,
+                                              fontWeight: FontWeight.w700,
+                                              color: Colors.black87,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 4),
+                                          Text(
+                                            _stepSubtitles[step],
+                                            style: TextStyle(
+                                              fontSize: 13,
+                                              color: Colors.grey[500],
+                                            ),
+                                          ),
+                                          const SizedBox(height: 20),
+                                          _buildStepContent(),
+                                          const SizedBox(height: 16),
+                                        ],
+                                      )
+                                    : const SizedBox(height: 46),
                               ),
                             ),
-                            const SizedBox(height: 20),
-
-                            // Field
-                            _buildStepContent(),
                           ],
                         ),
-                      ),
-                    ),
-                  ],
+                      );
+                    }),
+                  ),
                 ),
               ),
 
@@ -368,14 +373,4 @@ class _AddResellerScreenState extends State<AddResellerScreen> {
     );
   }
 
-  // Connector line between dots — blue when step is done
-  Widget _buildConnector(int step) {
-    final isDone = step < _currentStep;
-    return Container(
-      width: 2,
-      height: 44,
-      margin: const EdgeInsets.symmetric(vertical: 4),
-      color: isDone ? const Color(0xFF2563EB) : Colors.grey[300],
-    );
-  }
 }

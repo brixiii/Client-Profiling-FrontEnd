@@ -3,6 +3,7 @@ import '../../../theme/colors.dart';
 import '../../../shared/widgets/custom_text_field.dart';
 import '../../reset_password/screens/reset_password_screen.dart';
 import '../../dashboard/screens/dashboard_screen.dart';
+import '../../preloader/widgets/washing_loader.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({Key? key}) : super(key: key);
@@ -15,6 +16,18 @@ class _LoginScreenState extends State<LoginScreen> {
   final _usernameController = TextEditingController();
   final _passwordController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
+  bool _isLoading = false;
+
+  Future<void> _handleLogin() async {
+    if (!(_formKey.currentState?.validate() ?? false)) return;
+    setState(() => _isLoading = true);
+    // Simulate network / auth delay — replace with your real auth call here.
+    await Future.delayed(const Duration(seconds: 3));
+    if (!mounted) return;
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(builder: (_) => const DashboardScreen()),
+    );
+  }
 
   @override
   void dispose() {
@@ -27,9 +40,11 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget build(BuildContext context) {
     final screenHeight = MediaQuery.of(context).size.height;
 
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      body: SafeArea(
+    return Stack(
+      children: [
+        Scaffold(
+          backgroundColor: AppColors.background,
+          body: SafeArea(
         child: SingleChildScrollView(
           child: SizedBox(
             height: screenHeight - MediaQuery.of(context).padding.top,
@@ -225,16 +240,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                 child: Material(
                                   color: Colors.transparent,
                                   child: InkWell(
-                                    onTap: () {
-                                      if (_formKey.currentState?.validate() ??
-                                          false) {
-                                        Navigator.of(context).pushReplacement(
-                                          MaterialPageRoute(
-                                            builder: (context) => const DashboardScreen(),
-                                          ),
-                                        );
-                                      }
-                                    },
+                                    onTap: _isLoading ? null : _handleLogin,
                                     borderRadius: BorderRadius.circular(24),
                                     child: const Padding(
                                       padding: EdgeInsets.symmetric(
@@ -274,6 +280,16 @@ class _LoginScreenState extends State<LoginScreen> {
           ),
         ),
       ),
+    ),
+        // Loading overlay — sits on top of the whole screen
+        if (_isLoading)
+          Container(
+            color: Colors.black54,
+            child: const Center(
+              child: WashingLoader(scale: 1.2),
+            ),
+          ),
+      ],
     );
   }
 }

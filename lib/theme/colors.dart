@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 class AppColors {
   // Sky Blue — calendar's primary hero color (scaffold, AppBar, accents)
-  static const Color primary = Color(0xFF87CEEB);
+  static const Color primary = Color(0xFFF5F7FA);
 
   // Interactive Blue — buttons, active states, focus borders (from calendar)
   static const Color secondary = Color(0xFF2563EB);

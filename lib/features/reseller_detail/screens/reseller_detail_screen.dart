@@ -1,5 +1,5 @@
-import 'package:flutter/material.dart';
-import '../../../shared/widgets/app_drawer.dart';
+﻿import 'package:flutter/material.dart';
+import '../../../shared/widgets/custom_app_bar.dart';
 
 class ResellerDetailScreen extends StatefulWidget {
   final Map<String, String> reseller;
@@ -54,25 +54,9 @@ class _ResellerDetailScreenState extends State<ResellerDetailScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-      appBar: AppBar(
-        backgroundColor: const Color(0xFF87CEEB),
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded,
-              color: Colors.white, size: 20),
-          onPressed: () => Navigator.of(context).pop(),
-        ),
-        title: const Text(
-          'Reseller Detail',
-          style: TextStyle(
-            color: Colors.white,
-            fontSize: 18,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        centerTitle: true,
+      appBar: CustomAppBar(
+        title: 'Reseller Detail',
       ),
-      drawer: const AppDrawer(currentPage: 'Resellers'),
       body: SingleChildScrollView(
         padding: const EdgeInsets.fromLTRB(16, 20, 16, 32),
         child: Column(

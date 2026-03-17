@@ -1,8 +1,9 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import '../../../shared/widgets/analytics_card.dart';
 import '../../../shared/widgets/app_drawer.dart';
-import '../../add_client/screens/add_client_screen.dart';
-import 'client_detail_screen.dart';
+import '../../../shared/widgets/custom_app_bar.dart';
+import 'screens/add_client/add_buttons_screen.dart';
+import 'clientshop_details_screen.dart';
 
 class DirectClientScreen extends StatefulWidget {
   const DirectClientScreen({Key? key}) : super(key: key);
@@ -30,27 +31,10 @@ class _DirectClientScreenState extends State<DirectClientScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF87CEEB),
-      appBar: AppBar(
-                backgroundColor: const Color(0xFF87CEEB),
-        elevation: 0,
-        leading: Builder(
-          builder: (context) => IconButton(
-            icon: const Icon(Icons.menu, color: Colors.white),
-            onPressed: () {
-              Scaffold.of(context).openDrawer();
-            },
-          ),
-        ),
-        title: const Text(
-          'Direct Client',
-          style: TextStyle(
-            color: Colors.white,
-            fontSize: 18,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        centerTitle: true,
+      backgroundColor: const Color(0xFFF5F7FA),
+      appBar: CustomAppBar(
+        title: 'Direct Client',
+        showMenuButton: true,
       ),
       drawer: const AppDrawer(currentPage: 'Direct Client'),
       body: SingleChildScrollView(
@@ -68,17 +52,17 @@ class _DirectClientScreenState extends State<DirectClientScreen> {
               childAspectRatio: 1.5,
               children: const [
                 AnalyticsCard(
-                  title: 'Overall Owner',
+                  title: 'Owner',
                   value: '618',
                   backgroundColor: Color(0xFFB3E5FC),
                 ),
                 AnalyticsCard(
-                  title: 'Overall Co-Owner',
+                  title: 'Co-Owner',
                   value: '5',
                   backgroundColor: Color(0xFFB3E5FC),
                 ),
                 AnalyticsCard(
-                  title: 'Overall Shops',
+                  title: 'Shops',
                   value: '681',
                   backgroundColor: Color(0xFFB3E5FC),
                 ),
@@ -91,8 +75,9 @@ class _DirectClientScreenState extends State<DirectClientScreen> {
             ),
             const SizedBox(height: 12),
             
-            // Successful Service Card (single)
+            // Successful Service Card (single, full-width)
             const SizedBox(
+              width: double.infinity,
               height: 90,
               child: AnalyticsCard(
                 title: 'Successful Service',
@@ -129,15 +114,17 @@ class _DirectClientScreenState extends State<DirectClientScreen> {
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (context) => const AddClientScreen(),
+                              builder: (context) => const AddButtonsScreen(
+                                mode: AddMode.client,
+                              ),
                             ),
                           );
                         },
                         icon: const Icon(Icons.add, size: 18),
                         label: const Text('Add Client'),
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF2563EB),
-                          foregroundColor: Colors.white,
+                          backgroundColor: const Color(0xFFFFC300),
+                          foregroundColor: Colors.black,
                           padding: const EdgeInsets.symmetric(
                             horizontal: 16,
                             vertical: 10,
@@ -272,7 +259,7 @@ class _DirectClientScreenState extends State<DirectClientScreen> {
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (_) => ClientDetailScreen(client: client),
+                            builder: (_) => ClientDetailsScreen(client: client),
                           ),
                         );
                       },

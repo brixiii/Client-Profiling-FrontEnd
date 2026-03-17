@@ -1,0 +1,470 @@
+import 'package:flutter/material.dart';
+import '../models/product_model.dart';
+import '../../../shared/widgets/app_drawer.dart';
+import '../../../shared/widgets/custom_app_bar.dart';
+import 'add_product_model_screen.dart';
+import 'product_model_detail_screen.dart';
+
+class ProductModelScreen extends StatefulWidget {
+  const ProductModelScreen({Key? key}) : super(key: key);
+
+  @override
+  State<ProductModelScreen> createState() => _ProductModelScreenState();
+}
+
+class _ProductModelScreenState extends State<ProductModelScreen> {
+  final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = '';
+  int _currentPage = 1;
+  final int _itemsPerPage = 5;
+
+  final List<ProductModel> _items = const [
+    ProductModel(
+      id: '1',
+      name: 'LG Giant C Max\nWasher (CWG)',
+      brand: 'LG',
+      category: 'Washer',
+      description: 'Giant C Max series',
+      modelCode: 'CWG27MDCRB',
+      washerCode: 'CWG327MDCRB',
+    ),
+    ProductModel(
+      id: '2',
+      name: 'LG Giant C Max\nDryer (CDG)',
+      brand: 'LG',
+      category: 'Dryer',
+      description: 'Giant C Max series',
+      modelCode: 'CDG',
+      dryerCode: 'CDG327MDCRB',
+    ),
+    ProductModel(
+      id: '3',
+      name: 'LG Titan C Max\nWasher (CWT)',
+      brand: 'LG',
+      category: 'Washer',
+      description: 'Titan C Max series',
+      modelCode: 'CWT',
+      washerCode: 'CWT327MDCRB',
+    ),
+    ProductModel(
+      id: '4',
+      name: 'LG Titan C Max\nDryer (CDT)',
+      brand: 'LG',
+      category: 'Dryer',
+      description: 'Titan C Max series',
+      modelCode: 'CDT',
+      dryerCode: 'CDT327MDCRB',
+    ),
+  ];
+
+  List<ProductModel> get _filtered => _items
+      .where((e) =>
+          e.name.toLowerCase().contains(_searchQuery.toLowerCase()) ||
+          e.modelCode.toLowerCase().contains(_searchQuery.toLowerCase()))
+      .toList();
+
+  List<ProductModel> get _pageItems {
+    final start = (_currentPage - 1) * _itemsPerPage;
+    final end = (start + _itemsPerPage).clamp(0, _filtered.length);
+    if (start >= _filtered.length) return [];
+    return _filtered.sublist(start, end);
+  }
+
+  int get _totalPages =>
+      (_filtered.length / _itemsPerPage).ceil().clamp(1, double.maxFinite).toInt();
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.white,
+      appBar: CustomAppBar(title: 'Inventory', showMenuButton: true),
+      drawer: const AppDrawer(currentPage: 'Product Model'),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // ── Stat cards ───────────────────────────────────────────
+            Row(
+              children: [
+                Expanded(child: _StatCard(label: 'Spare Parts\nUsed', value: '0')),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _StatCard(label: 'Available\nSpare Parts', value: '1257'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 28),
+
+            // ── Section heading + Add button ─────────────────────────
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                const Text(
+                  'Product Model',
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.black87,
+                  ),
+                ),
+                ElevatedButton.icon(
+                  onPressed: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const AddProductModelScreen(),
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.add, size: 18, color: Colors.white),
+                  label: const Text(
+                    '+ Add Model',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 13,
+                    ),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFF5A623),
+                    elevation: 0,
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 14, vertical: 10),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+
+            // ── Search field ─────────────────────────────────────────
+            SizedBox(
+              width: 160,
+              height: 36,
+              child: TextField(
+                controller: _searchController,
+                style: const TextStyle(fontSize: 13),
+                decoration: InputDecoration(
+                  hintText: 'Search',
+                  hintStyle:
+                      const TextStyle(fontSize: 13, color: Colors.black38),
+                  contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 10, vertical: 8),
+                  filled: true,
+                  fillColor: Colors.white,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(4),
+                    borderSide:
+                        const BorderSide(color: Color(0xFFBBBBBB)),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(4),
+                    borderSide:
+                        const BorderSide(color: Color(0xFFBBBBBB)),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(4),
+                    borderSide: const BorderSide(
+                        color: Color(0xFF2563EB), width: 1.5),
+                  ),
+                ),
+                onChanged: (v) => setState(() {
+                  _searchQuery = v;
+                  _currentPage = 1;
+                }),
+              ),
+            ),
+            const SizedBox(height: 12),
+
+            // ── Table ────────────────────────────────────────────────
+            Container(
+              decoration: BoxDecoration(
+                border:
+                    Border.all(color: const Color(0xFFCCCCCC), width: 1),
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: Column(
+                children: [
+                  // Header row
+                  Container(
+                    decoration: const BoxDecoration(
+                      color: Color(0xFFF9F9F9),
+                      borderRadius:
+                          BorderRadius.vertical(top: Radius.circular(3)),
+                    ),
+                    child: IntrinsicHeight(
+                      child: Row(
+                        children: [
+                          Expanded(
+                            flex: 5,
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                  vertical: 12, horizontal: 8),
+                              child: Text(
+                                'Model Name',
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 13,
+                                  color: Colors.black87,
+                                ),
+                              ),
+                            ),
+                          ),
+                          const VerticalDivider(
+                              width: 1, thickness: 1,
+                              color: Color(0xFFCCCCCC)),
+                          Expanded(
+                            flex: 4,
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                  vertical: 12, horizontal: 8),
+                              child: Text(
+                                'Model Code',
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 13,
+                                  color: Colors.black87,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const Divider(
+                      height: 1, thickness: 1, color: Color(0xFFCCCCCC)),
+
+                  // Data rows
+                  if (_pageItems.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 24),
+                      child: Center(
+                        child: Text('No records found.',
+                            style: TextStyle(
+                                color: Colors.black45, fontSize: 13)),
+                      ),
+                    )
+                  else
+                    ...List.generate(_pageItems.length, (index) {
+                      final item = _pageItems[index];
+                      final isLast = index == _pageItems.length - 1;
+                      return Column(
+                        children: [
+                          InkWell(
+                            onTap: () {
+                              Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (_) =>
+                                      ProductModelDetailScreen(item: item),
+                                ),
+                              );
+                            },
+                            child: IntrinsicHeight(
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    flex: 5,
+                                    child: Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                          vertical: 14, horizontal: 8),
+                                      child: Text(
+                                        item.name,
+                                        textAlign: TextAlign.center,
+                                        style: const TextStyle(
+                                          fontSize: 13,
+                                          color: Colors.black87,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  const VerticalDivider(
+                                      width: 1,
+                                      thickness: 1,
+                                      color: Color(0xFFCCCCCC)),
+                                  Expanded(
+                                    flex: 4,
+                                    child: Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                          vertical: 14, horizontal: 8),
+                                      child: Text(
+                                        item.modelCode,
+                                        textAlign: TextAlign.center,
+                                        style: const TextStyle(
+                                          fontSize: 13,
+                                          color: Colors.black87,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                          if (!isLast)
+                            const Divider(
+                                height: 1,
+                                thickness: 1,
+                                color: Color(0xFFCCCCCC)),
+                        ],
+                      );
+                    }),
+                ],
+              ),
+            ),
+            const SizedBox(height: 10),
+
+            // ── Pagination footer ────────────────────────────────────
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  _filtered.isEmpty
+                      ? 'Showing 0 entries'
+                      : 'Showing ${(_currentPage - 1) * _itemsPerPage + 1} to '
+                          '${((_currentPage * _itemsPerPage).clamp(1, _filtered.length))} '
+                          'of ${_filtered.length} entries',
+                  style: const TextStyle(
+                      fontSize: 11, color: Colors.black45),
+                ),
+                Row(
+                  children: [
+                    _PageButton(
+                      icon: Icons.first_page,
+                      onTap: _currentPage > 1
+                          ? () => setState(() => _currentPage = 1)
+                          : null,
+                    ),
+                    _PageButton(
+                      icon: Icons.chevron_left,
+                      onTap: _currentPage > 1
+                          ? () =>
+                              setState(() => _currentPage -= 1)
+                          : null,
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        border: Border.all(
+                            color: const Color(0xFFCCCCCC)),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text(
+                        '$_currentPage',
+                        style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                    _PageButton(
+                      icon: Icons.chevron_right,
+                      onTap: _currentPage < _totalPages
+                          ? () =>
+                              setState(() => _currentPage += 1)
+                          : null,
+                    ),
+                    _PageButton(
+                      icon: Icons.last_page,
+                      onTap: _currentPage < _totalPages
+                          ? () =>
+                              setState(() => _currentPage = _totalPages)
+                          : null,
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── Stat card ─────────────────────────────────────────────────────────────
+
+class _StatCard extends StatelessWidget {
+  final String label;
+  final String value;
+
+  const _StatCard({required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFF90CAF9), width: 1.5),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: const TextStyle(
+              fontSize: 13,
+              color: Colors.black54,
+              height: 1.4,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            value,
+            style: const TextStyle(
+              fontSize: 28,
+              fontWeight: FontWeight.w700,
+              color: Colors.black87,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Pagination button ─────────────────────────────────────────────────────
+
+class _PageButton extends StatelessWidget {
+  final IconData icon;
+  final VoidCallback? onTap;
+
+  const _PageButton({required this.icon, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 2),
+        padding: const EdgeInsets.all(4),
+        decoration: BoxDecoration(
+          border: Border.all(color: const Color(0xFFCCCCCC)),
+          borderRadius: BorderRadius.circular(4),
+          color: onTap == null
+              ? const Color(0xFFF0F0F0)
+              : Colors.white,
+        ),
+        child: Icon(
+          icon,
+          size: 16,
+          color:
+              onTap == null ? Colors.black26 : Colors.black54,
+        ),
+      ),
+    );
+  }
+}

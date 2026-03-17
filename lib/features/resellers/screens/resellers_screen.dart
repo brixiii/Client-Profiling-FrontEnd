@@ -1,8 +1,9 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import '../../../shared/widgets/analytics_card.dart';
 import '../../../shared/widgets/app_drawer.dart';
+import '../../../shared/widgets/custom_app_bar.dart';
 import '../../reseller_detail/screens/reseller_detail_screen.dart';
-import '../../add_reseller/screens/add_reseller_screen.dart';
+import 'add_reseller/screens/add_reseller_screen.dart';
 
 class ResellersScreen extends StatefulWidget {
   const ResellersScreen({Key? key}) : super(key: key);
@@ -60,30 +61,13 @@ class _ResellersScreenState extends State<ResellersScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF87CEEB),
-      appBar: AppBar(
-        backgroundColor: const Color(0xFF87CEEB),
-        elevation: 0,
-        leading: Builder(
-          builder: (context) => IconButton(
-            icon: const Icon(Icons.menu, color: Colors.white),
-            onPressed: () {
-              Scaffold.of(context).openDrawer();
-            },
-          ),
-        ),
-        title: const Text(
-          'Resellers',
-          style: TextStyle(
-            color: Colors.white,
-            fontSize: 18,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        centerTitle: true,
+      backgroundColor: const Color(0xFFF5F7FA),
+      appBar: CustomAppBar(
+        title: 'Resellers',
+        showMenuButton: true,
         actions: [
           IconButton(
-            icon: const Icon(Icons.notifications_outlined, color: Colors.white),
+            icon: const Icon(Icons.notifications_outlined, color: Colors.black87),
             onPressed: () {},
           ),
         ],

@@ -1,7 +1,8 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import '../../../shared/widgets/analytics_card.dart';
 import '../../../shared/widgets/app_drawer.dart';
+import '../../../shared/widgets/custom_app_bar.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({Key? key}) : super(key: key);
@@ -12,10 +13,16 @@ class DashboardScreen extends StatefulWidget {
 
 class _DashboardScreenState extends State<DashboardScreen>
     with SingleTickerProviderStateMixin {
-  String selectedService = 'Select Services to Purchase';
+  String selectedService = 'Service Types';
+  String selectedMonth = 'Select Months to Compare';
 
   // ── Profile panel state ──────────────────────────────────────────────────
   bool _profileVisible = false;
+  bool _isEditing = false;
+  late final TextEditingController _usernameCtrl;
+  late final TextEditingController _addressCtrl;
+  late final TextEditingController _phoneCtrl;
+  late final TextEditingController _emailCtrl;
   late final AnimationController _profileAnim;
   late final Animation<Offset> _slideAnim;
   late final Animation<double> _fadeAnim;
@@ -23,6 +30,10 @@ class _DashboardScreenState extends State<DashboardScreen>
   @override
   void initState() {
     super.initState();
+    _usernameCtrl = TextEditingController(text: 'dev');
+    _addressCtrl  = TextEditingController(text: 'DEv');
+    _phoneCtrl    = TextEditingController(text: '0962-464-3757');
+    _emailCtrl    = TextEditingController(text: 'maryosepkaalvince@gmail.com');
     _profileAnim = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 380),
@@ -40,6 +51,10 @@ class _DashboardScreenState extends State<DashboardScreen>
 
   @override
   void dispose() {
+    _usernameCtrl.dispose();
+    _addressCtrl.dispose();
+    _phoneCtrl.dispose();
+    _emailCtrl.dispose();
     _profileAnim.dispose();
     super.dispose();
   }
@@ -68,31 +83,14 @@ class _DashboardScreenState extends State<DashboardScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF87CEEB),
-      appBar: AppBar(
-        backgroundColor: const Color(0xFF87CEEB),
-        elevation: 0,
-        leading: Builder(
-          builder: (context) => IconButton(
-            icon: const Icon(Icons.menu, color: Colors.white),
-            onPressed: () {
-              Scaffold.of(context).openDrawer();
-            },
-          ),
-        ),
-        title: const Text(
-          'Dashboard',
-          style: TextStyle(
-            color: Colors.white,
-            fontSize: 18,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        centerTitle: true,
+      backgroundColor: const Color(0xFFF5F7FA),
+      appBar: CustomAppBar(
+        title: 'Dashboard',
+        showMenuButton: true,
         actions: [
           // Notification icon
           IconButton(
-            icon: const Icon(Icons.notifications_outlined, color: Colors.white),
+            icon: const Icon(Icons.notifications_outlined, color: Colors.black87),
             onPressed: () {},
           ),
           // Profile avatar — tapping opens the slide-up panel
@@ -102,13 +100,13 @@ class _DashboardScreenState extends State<DashboardScreen>
               onTap: _toggleProfile,
               child: CircleAvatar(
                 radius: 18,
-                backgroundColor: Colors.white.withOpacity(0.22),
+                backgroundColor: Colors.black.withOpacity(0.08),
                 child: Icon(
                   Icons.person_outline,
                   size: 22,
                   color: _profileVisible
                       ? const Color(0xFF2563EB)
-                      : Colors.white,
+                      : Colors.black87,
                 ),
               ),
             ),
@@ -131,7 +129,7 @@ class _DashboardScreenState extends State<DashboardScreen>
               style: TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.w600,
-                color: Colors.white,
+                color: Colors.black87,
               ),
             ),
             const SizedBox(height: 16),
@@ -146,12 +144,12 @@ class _DashboardScreenState extends State<DashboardScreen>
               childAspectRatio: 1.5,
               children: const [
                 AnalyticsCard(
-                  title: 'Overall Client',
+                  title: 'Client',
                   value: '618',
                   backgroundColor: Color(0xFFB3E5FC),
                 ),
                 AnalyticsCard(
-                  title: 'All Sold Product',
+                  title: 'Sold Product',
                   value: '5,627',
                   backgroundColor: Color(0xFFB3E5FC),
                 ),
@@ -161,7 +159,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                   backgroundColor: Color(0xFFB3E5FC),
                 ),
                 AnalyticsCard(
-                  title: 'All Shops',
+                  title: 'Shops',
                   value: '601',
                   backgroundColor: Color(0xFFB3E5FC),
                 ),
@@ -340,11 +338,13 @@ class _DashboardScreenState extends State<DashboardScreen>
                     'Available Services',
                     style: TextStyle(
                       fontSize: 16,
-                      fontWeight: FontWeight.w600,
+                      fontWeight: FontWeight.bold,
+                      fontStyle: FontStyle.italic,
                       color: Colors.black,
                     ),
                   ),
                   const SizedBox(height: 12),
+                  // Service Types dropdown
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 12),
                     decoration: BoxDecoration(
@@ -357,8 +357,8 @@ class _DashboardScreenState extends State<DashboardScreen>
                       underline: const SizedBox(),
                       items: const [
                         DropdownMenuItem(
-                          value: 'Select Services to Purchase',
-                          child: Text('Select Services to Purchase'),
+                          value: 'Service Types',
+                          child: Text('Service Types'),
                         ),
                         DropdownMenuItem(
                           value: 'Service 1',
@@ -376,17 +376,56 @@ class _DashboardScreenState extends State<DashboardScreen>
                       },
                     ),
                   ),
+                  const SizedBox(height: 10),
+                  // Select Months to Compare dropdown
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    decoration: BoxDecoration(
+                      border: Border.all(color: Colors.grey[300]!),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: DropdownButton<String>(
+                      value: selectedMonth,
+                      isExpanded: true,
+                      underline: const SizedBox(),
+                      items: const [
+                        DropdownMenuItem(
+                          value: 'Select Months to Compare',
+                          child: Text('Select Months to Compare'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'Last 3 Months',
+                          child: Text('Last 3 Months'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'Last 6 Months',
+                          child: Text('Last 6 Months'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'Last 12 Months',
+                          child: Text('Last 12 Months'),
+                        ),
+                      ],
+                      onChanged: (value) {
+                        setState(() {
+                          selectedMonth = value!;
+                        });
+                      },
+                    ),
+                  ),
                   const SizedBox(height: 12),
-                  SizedBox(
-                    width: double.infinity,
+                  Align(
+                    alignment: Alignment.centerRight,
                     child: ElevatedButton(
                       onPressed: () {},
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF2563EB),
-                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        backgroundColor: const Color(0xFF29B6F6),
+                        padding: const EdgeInsets.symmetric(
+                            vertical: 12, horizontal: 32),
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
+                          borderRadius: BorderRadius.circular(24),
                         ),
+                        elevation: 0,
                       ),
                       child: const Text(
                         'Apply',
@@ -567,6 +606,48 @@ class _DashboardScreenState extends State<DashboardScreen>
     );
   }
 
+  // ── Editable row helper ─────────────────────────────────────────────────
+  Widget _buildEditRow(String label, TextEditingController controller) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF5F5F5),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: const Color(0xFF2563EB), width: 1.5),
+      ),
+      child: Row(
+        children: [
+          Text(
+            '$label:',
+            style: const TextStyle(
+              fontSize: 14,
+              color: Colors.black54,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: TextField(
+              controller: controller,
+              textAlign: TextAlign.end,
+              style: const TextStyle(
+                fontSize: 14,
+                color: Colors.black87,
+                fontWeight: FontWeight.w600,
+              ),
+              decoration: const InputDecoration(
+                isDense: true,
+                border: InputBorder.none,
+                contentPadding: EdgeInsets.symmetric(vertical: 8),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   // ── Profile panel widget ─────────────────────────────────────────────────
   // Returns the floating card shown when the profile avatar is tapped
   Widget _buildProfilePanel() {
@@ -634,15 +715,23 @@ class _DashboardScreenState extends State<DashboardScreen>
             ),
             const SizedBox(height: 20),
             // ── Info rows ─────────────────────────────────────────────
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 16),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
               child: Column(
                 children: [
-                  _ProfileInfoRow(label: 'Username', value: 'dev'),
-                  _ProfileInfoRow(label: 'Address',  value: 'DEv'),
-                  _ProfileInfoRow(label: 'Phone',    value: '0962-464-3757'),
-                  _ProfileInfoRow(label: 'Email',    value: 'maryosepkaalvince@gmail.com'),
-                  _ProfileInfoRow(label: 'Role',     value: 'Admin'),
+                  _isEditing
+                      ? _buildEditRow('Username', _usernameCtrl)
+                      : _ProfileInfoRow(label: 'Username', value: _usernameCtrl.text),
+                  _isEditing
+                      ? _buildEditRow('Address', _addressCtrl)
+                      : _ProfileInfoRow(label: 'Address', value: _addressCtrl.text),
+                  _isEditing
+                      ? _buildEditRow('Phone', _phoneCtrl)
+                      : _ProfileInfoRow(label: 'Phone', value: _phoneCtrl.text),
+                  _isEditing
+                      ? _buildEditRow('Email', _emailCtrl)
+                      : _ProfileInfoRow(label: 'Email', value: _emailCtrl.text),
+                  const _ProfileInfoRow(label: 'Role', value: 'Admin'),
                 ],
               ),
             ),
@@ -652,12 +741,17 @@ class _DashboardScreenState extends State<DashboardScreen>
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
               child: Row(
                 children: [
-                  // Edit profile button
+                  // Edit / Save profile button
                   Expanded(
                     child: ElevatedButton.icon(
-                      onPressed: () {},
-                      icon: const Icon(Icons.edit_outlined, size: 18),
-                      label: const Text('Edit'),
+                      onPressed: () {
+                        setState(() => _isEditing = !_isEditing);
+                      },
+                      icon: Icon(
+                        _isEditing ? Icons.save_outlined : Icons.edit_outlined,
+                        size: 18,
+                      ),
+                      label: Text(_isEditing ? 'Save' : 'Edit'),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFF2563EB),
                         foregroundColor: Colors.white,
