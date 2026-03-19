@@ -2,7 +2,7 @@
 import '../../../shared/widgets/analytics_card.dart';
 import '../../../shared/widgets/app_drawer.dart';
 import '../../../shared/widgets/custom_app_bar.dart';
-import '../../reseller_detail/screens/reseller_detail_screen.dart';
+import 'reseller_detail_screen.dart';
 import 'add_reseller/screens/add_reseller_screen.dart';
 
 class ResellersScreen extends StatefulWidget {
@@ -299,6 +299,7 @@ class _ResellersScreenState extends State<ResellersScreen> {
                           width: 80,
                           child: Text(
                             'Actions',
+                            textAlign: TextAlign.center,
                             style: TextStyle(
                               fontSize: 13,
                               fontWeight: FontWeight.w600,
@@ -371,7 +372,8 @@ class _ResellersScreenState extends State<ResellersScreen> {
                             ),
                             SizedBox(
                               width: 80,
-                              child: OutlinedButton(
+                              child: Center(
+                                child: OutlinedButton(
                                 onPressed: () {
                                   Navigator.push(
                                     context,
@@ -412,8 +414,9 @@ class _ResellersScreenState extends State<ResellersScreen> {
                                     ),
                                   ],
                                 ),
-                              ),
-                            ),
+                              ),  // OutlinedButton
+                            ),  // Center
+                          ),  // SizedBox
                           ],
                         ),
                       );

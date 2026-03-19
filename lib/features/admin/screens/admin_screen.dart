@@ -447,69 +447,125 @@ class _AdminScreenState extends State<AdminScreen> {
                     fontWeight: FontWeight.w600,
                     color: Colors.grey[700])),
           ),
+          SizedBox(
+            width: 72,
+            child: Text(
+              'Actions',
+              style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.grey[700]),
+            ),
+          ),
         ],
       ),
     );
   }
 
   Widget _buildAdminTableRow(BuildContext context, Map<String, String> admin) {
-    return InkWell(
-      onTap: () => Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => AdminDetailScreen(admin: admin),
-        ),
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+      decoration: BoxDecoration(
+        border: Border(bottom: BorderSide(color: Colors.grey[200]!)),
       ),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-        decoration: BoxDecoration(
-          border: Border(bottom: BorderSide(color: Colors.grey[200]!)),
-        ),
-        child: Row(
-          children: [
-            Expanded(
-              flex: 3,
-              child: Text(admin['name']!,
-                  style: const TextStyle(fontSize: 13, color: Colors.black87)),
+      child: Row(
+        children: [
+          Expanded(
+            flex: 3,
+            child: Text(admin['name']!,
+                style: const TextStyle(fontSize: 13, color: Colors.black87)),
+          ),
+          Expanded(
+            flex: 2,
+            child: Text(admin['role']!,
+                style: const TextStyle(fontSize: 13, color: Colors.black87)),
+          ),
+          SizedBox(
+            width: 72,
+            child: OutlinedButton(
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => AdminDetailScreen(admin: admin),
+                ),
+              ),
+              style: OutlinedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                side: const BorderSide(color: Color(0xFF2563EB)),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(4)),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min,
+                children: const [
+                  Icon(Icons.visibility_outlined,
+                      size: 13, color: Color(0xFF2563EB)),
+                  SizedBox(width: 3),
+                  Text('View',
+                      style: TextStyle(
+                          fontSize: 11,
+                          color: Color(0xFF2563EB),
+                          fontWeight: FontWeight.w600)),
+                ],
+              ),
             ),
-            Expanded(
-              flex: 2,
-              child: Text(admin['role']!,
-                  style: const TextStyle(fontSize: 13, color: Colors.black87)),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
 
   Widget _buildEmployeeTableRow(BuildContext context, Map<String, String> emp) {
-    return InkWell(
-      onTap: () => Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => EmployeeDetailScreen(employee: emp),
-        ),
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+      decoration: BoxDecoration(
+        border: Border(bottom: BorderSide(color: Colors.grey[200]!)),
       ),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-        decoration: BoxDecoration(
-          border: Border(bottom: BorderSide(color: Colors.grey[200]!)),
-        ),
-        child: Row(
-          children: [
-            Expanded(
-              flex: 3,
-              child: Text(emp['name']!,
-                  style: const TextStyle(fontSize: 13, color: Colors.black87)),
+      child: Row(
+        children: [
+          Expanded(
+            flex: 3,
+            child: Text(emp['name']!,
+                style: const TextStyle(fontSize: 13, color: Colors.black87)),
+          ),
+          Expanded(
+            flex: 2,
+            child: Text(emp['position']!,
+                style: const TextStyle(fontSize: 13, color: Colors.black87)),
+          ),
+          SizedBox(
+            width: 72,
+            child: OutlinedButton(
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => EmployeeDetailScreen(employee: emp),
+                ),
+              ),
+              style: OutlinedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                side: const BorderSide(color: Color(0xFF2563EB)),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(4)),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min,
+                children: const [
+                  Icon(Icons.visibility_outlined,
+                      size: 13, color: Color(0xFF2563EB)),
+                  SizedBox(width: 3),
+                  Text('View',
+                      style: TextStyle(
+                          fontSize: 11,
+                          color: Color(0xFF2563EB),
+                          fontWeight: FontWeight.w600)),
+                ],
+              ),
             ),
-            Expanded(
-              flex: 2,
-              child: Text(emp['position']!,
-                  style: const TextStyle(fontSize: 13, color: Colors.black87)),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

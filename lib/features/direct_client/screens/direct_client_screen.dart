@@ -224,6 +224,17 @@ class _DirectClientScreenState extends State<DirectClientScreen> {
                             ),
                           ),
                         ),
+                        SizedBox(
+                          width: 80,
+                          child: Padding(
+                            padding: EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+                            child: Text(
+                              'Actions',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                            ),
+                          ),
+                        ),
                       ],
                     ),
                   ),
@@ -254,45 +265,73 @@ class _DirectClientScreenState extends State<DirectClientScreen> {
                       ),
                     )
                   else
-                    ...clients.map((client) => InkWell(
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => ClientDetailsScreen(client: client),
-                          ),
-                        );
-                      },
-                      child: Container(
-                        decoration: BoxDecoration(
-                          border: Border(
-                            bottom: BorderSide(color: Colors.grey[200]!, width: 1),
-                          ),
+                    ...clients.map((client) => Container(
+                      decoration: BoxDecoration(
+                        border: Border(
+                          bottom: BorderSide(color: Colors.grey[200]!, width: 1),
                         ),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: Padding(
-                                padding: const EdgeInsets.symmetric(
-                                    vertical: 16, horizontal: 8),
-                                child: Text(
-                                  client['shop']!,
-                                  style: const TextStyle(fontSize: 14),
+                      ),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                  vertical: 16, horizontal: 8),
+                              child: Text(
+                                client['shop']!,
+                                style: const TextStyle(fontSize: 14),
+                              ),
+                            ),
+                          ),
+                          Expanded(
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                  vertical: 16, horizontal: 8),
+                              child: Text(
+                                client['name']!,
+                                style: const TextStyle(fontSize: 14),
+                              ),
+                            ),
+                          ),
+                          SizedBox(
+                            width: 80,
+                            child: Center(
+                              child: OutlinedButton(
+                                onPressed: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) =>
+                                          ClientDetailsScreen(client: client),
+                                    ),
+                                  );
+                                },
+                                style: OutlinedButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 6, vertical: 6),
+                                  side: const BorderSide(
+                                      color: Color(0xFF2563EB)),
+                                  shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(4)),
+                                ),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: const [
+                                    Icon(Icons.visibility_outlined,
+                                        size: 13, color: Color(0xFF2563EB)),
+                                    SizedBox(width: 3),
+                                    Text('View',
+                                        style: TextStyle(
+                                            fontSize: 11,
+                                            color: Color(0xFF2563EB),
+                                            fontWeight: FontWeight.w600)),
+                                  ],
                                 ),
                               ),
                             ),
-                            Expanded(
-                              child: Padding(
-                                padding: const EdgeInsets.symmetric(
-                                    vertical: 16, horizontal: 8),
-                                child: Text(
-                                  client['name']!,
-                                  style: const TextStyle(fontSize: 14),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
+                          ),
+                        ],
                       ),
                     )),
                   const SizedBox(height: 16),

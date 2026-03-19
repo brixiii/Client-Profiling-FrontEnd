@@ -247,6 +247,26 @@ class _SparePartsScreenState extends State<SparePartsScreen> {
                               ),
                             ),
                           ),
+                          const VerticalDivider(
+                              width: 1,
+                              thickness: 1,
+                              color: Color(0xFFCCCCCC)),
+                          SizedBox(
+                            width: 80,
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                  vertical: 12, horizontal: 8),
+                              child: const Text(
+                                'Actions',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 13,
+                                  color: Colors.black87,
+                                ),
+                              ),
+                            ),
+                          ),
                         ],
                       ),
                     ),
@@ -312,6 +332,53 @@ class _SparePartsScreenState extends State<SparePartsScreen> {
                                         style: const TextStyle(
                                           fontSize: 13,
                                           color: Colors.black87,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  const VerticalDivider(
+                                      width: 1,
+                                      thickness: 1,
+                                      color: Color(0xFFCCCCCC)),
+                                  SizedBox(
+                                    width: 80,
+                                    child: Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                          vertical: 10, horizontal: 6),
+                                      child: OutlinedButton(
+                                        onPressed: () {
+                                          Navigator.of(context).push(
+                                            MaterialPageRoute(
+                                              builder: (_) =>
+                                                  SparePartDetailScreen(item: item),
+                                            ),
+                                          );
+                                        },
+                                        style: OutlinedButton.styleFrom(
+                                          padding: const EdgeInsets.symmetric(
+                                              horizontal: 4, vertical: 4),
+                                          side: const BorderSide(
+                                              color: Color(0xFF2563EB)),
+                                          shape: RoundedRectangleBorder(
+                                              borderRadius:
+                                                  BorderRadius.circular(4)),
+                                        ),
+                                        child: Row(
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.center,
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: const [
+                                            Icon(Icons.visibility_outlined,
+                                                size: 13,
+                                                color: Color(0xFF2563EB)),
+                                            SizedBox(width: 3),
+                                            Text('View',
+                                                style: TextStyle(
+                                                    fontSize: 11,
+                                                    color: Color(0xFF2563EB),
+                                                    fontWeight:
+                                                        FontWeight.w600)),
+                                          ],
                                         ),
                                       ),
                                     ),

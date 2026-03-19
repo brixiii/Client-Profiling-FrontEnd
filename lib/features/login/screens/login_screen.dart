@@ -115,55 +115,14 @@ class _LoginScreenState extends State<LoginScreen> {
                               ),
                               const SizedBox(height: 8),
                               const Text(
-                                'Sign to your account',
+                                'Sign in to your account',
                                 style: TextStyle(
                                   fontSize: 14,
                                   color: AppColors.textSecondary,
                                   fontWeight: FontWeight.w400,
                                 ),
                               ),
-                              const SizedBox(height: 16),
-                              // Example credentials for testing
-                              Container(
-                                padding: const EdgeInsets.all(12),
-                                decoration: BoxDecoration(
-                                  color: Colors.blue[50],
-                                  borderRadius: BorderRadius.circular(8),
-                                  border: Border.all(
-                                    color: Colors.blue[200]!,
-                                    width: 1,
-                                  ),
-                                ),
-                                child: const Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      'Demo Account',
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w600,
-                                        color: Colors.blue,
-                                      ),
-                                    ),
-                                    SizedBox(height: 4),
-                                    Text(
-                                      'Username: demo@example.com',
-                                      style: TextStyle(
-                                        fontSize: 11,
-                                        color: Colors.blue,
-                                      ),
-                                    ),
-                                    Text(
-                                      'Password: Demo123456',
-                                      style: TextStyle(
-                                        fontSize: 11,
-                                        color: Colors.blue,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              const SizedBox(height: 40),
+                              const SizedBox(height: 28),
 
                               // Username field
                               CustomTextField(
@@ -214,10 +173,12 @@ class _LoginScreenState extends State<LoginScreen> {
                                   ),
                                 ),
                               ),
-                              const SizedBox(height: 40),
+                              const SizedBox(height: 28),
 
                               // Sign in button with gradient
-                              Container(
+                              SizedBox(
+                                width: double.infinity,
+                                child: Container(
                                 decoration: BoxDecoration(
                                   gradient: LinearGradient(
                                     colors: [
@@ -244,7 +205,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                     borderRadius: BorderRadius.circular(24),
                                     child: const Padding(
                                       padding: EdgeInsets.symmetric(
-                                        vertical: 14,
+                                        vertical: 16,
                                         horizontal: 24,
                                       ),
                                       child: Row(
@@ -257,7 +218,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                               fontSize: 16,
                                               fontWeight: FontWeight.w700,
                                               color: Colors.white,
-                                              letterSpacing: 0.3,
+                                              letterSpacing: 0.5,
                                             ),
                                           ),
                                         ],
@@ -265,6 +226,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                     ),
                                   ),
                                 ),
+                              ),
                               ),
                             ],
                           ),

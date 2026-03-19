@@ -1,69 +1,84 @@
 import 'package:flutter/material.dart';
 import '../../../shared/widgets/custom_app_bar.dart';
 
-class EditShopScreen extends StatefulWidget {
-  final Map<String, String> client;
+class EditProductDetailsScreen extends StatefulWidget {
+  final Map<String, String> product;
 
-  const EditShopScreen({Key? key, required this.client}) : super(key: key);
+  const EditProductDetailsScreen({Key? key, required this.product})
+      : super(key: key);
 
   @override
-  State<EditShopScreen> createState() => _EditShopScreenState();
+  State<EditProductDetailsScreen> createState() =>
+      _EditProductDetailsScreenState();
 }
 
-class _EditShopScreenState extends State<EditShopScreen> {
-  late final TextEditingController _shopNameController;
-  late final TextEditingController _shopAddressController;
-  late final TextEditingController _pinCoordinatesController;
-  late final TextEditingController _googleMapsController;
-  late final TextEditingController _contactPersonController;
-  late final TextEditingController _contactNoController;
-  late final TextEditingController _viberNoController;
-  late final TextEditingController _emailController;
+class _EditProductDetailsScreenState extends State<EditProductDetailsScreen> {
+  late final TextEditingController _modelCodeController;
+  late final TextEditingController _contractDateController;
+  late final TextEditingController _deliveryDateController;
+  late final TextEditingController _installationDateController;
+  late final TextEditingController _purchaseOrderController;
+  late final TextEditingController _deliveryReceiptController;
   late final TextEditingController _notesController;
 
-  String? _shopType;
-  final List<String> _shopTypes = ['Main Branch', 'Sub Branch', 'Kiosk'];
+  String? _supplierType;
+  String? _employeeName;
+
+  final List<String> _supplierTypes = ['Bulla Crave', 'Other Supplier'];
+  final List<String> _employeeNames = [
+    'Marion Brix Quiling',
+    'Cecile Aviles',
+    'Other Employee',
+  ];
 
   @override
   void initState() {
     super.initState();
-    _shopNameController =
-        TextEditingController(text: widget.client['shop'] ?? '');
-    _shopAddressController =
-        TextEditingController(text: widget.client['address'] ?? '');
-    _pinCoordinatesController =
-        TextEditingController(text: widget.client['pinLocation'] ?? '');
-    _googleMapsController =
-        TextEditingController(text: widget.client['googleMaps'] ?? '');
-    _contactPersonController =
-        TextEditingController(text: widget.client['contactPerson'] ?? '');
-    _contactNoController =
-        TextEditingController(text: widget.client['contactNo'] ?? '');
-    _viberNoController =
-        TextEditingController(text: widget.client['viberNo'] ?? '');
-    _emailController =
-        TextEditingController(text: widget.client['contactEmail'] ?? '');
+    _modelCodeController =
+        TextEditingController(text: widget.product['modelCode'] ?? '');
+    _contractDateController =
+        TextEditingController(text: widget.product['contractDate'] ?? '');
+    _deliveryDateController =
+        TextEditingController(text: widget.product['deliveryDate'] ?? '');
+    _installationDateController =
+        TextEditingController(text: widget.product['installationDate'] ?? '');
+    _purchaseOrderController =
+        TextEditingController(text: widget.product['poNumber'] ?? '');
+    _deliveryReceiptController =
+        TextEditingController(text: widget.product['drNumber'] ?? '');
     _notesController = TextEditingController();
 
-    // Pre-select shop type if it matches one of the options
-    final branchType = widget.client['branchType'] ?? '';
-    if (_shopTypes.contains(branchType)) {
-      _shopType = branchType;
-    }
+    final supplier = widget.product['supplierType'] ?? '';
+    if (_supplierTypes.contains(supplier)) _supplierType = supplier;
+
+    final employee = widget.product['employeeName'] ?? '';
+    if (_employeeNames.contains(employee)) _employeeName = employee;
   }
 
   @override
   void dispose() {
-    _shopNameController.dispose();
-    _shopAddressController.dispose();
-    _pinCoordinatesController.dispose();
-    _googleMapsController.dispose();
-    _contactPersonController.dispose();
-    _contactNoController.dispose();
-    _viberNoController.dispose();
-    _emailController.dispose();
+    _modelCodeController.dispose();
+    _contractDateController.dispose();
+    _deliveryDateController.dispose();
+    _installationDateController.dispose();
+    _purchaseOrderController.dispose();
+    _deliveryReceiptController.dispose();
     _notesController.dispose();
     super.dispose();
+  }
+
+  Future<void> _pickDate(TextEditingController controller) async {
+    final now = DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: now,
+      firstDate: DateTime(2000),
+      lastDate: DateTime(2100),
+    );
+    if (picked != null) {
+      controller.text =
+          '${picked.month.toString().padLeft(2, '0')}/${picked.day.toString().padLeft(2, '0')}/${picked.year}';
+    }
   }
 
   @override
@@ -80,7 +95,7 @@ class _EditShopScreenState extends State<EditShopScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text(
-                    'Edit Shop',
+                    'Edit Product Details',
                     style: TextStyle(
                       fontSize: 20,
                       fontWeight: FontWeight.bold,
@@ -89,45 +104,46 @@ class _EditShopScreenState extends State<EditShopScreen> {
                   ),
                   const SizedBox(height: 20),
 
-                  _buildField('Shop name', _shopNameController,
-                      hint: "3J's Laundry"),
+                  _buildField('Model Code', _modelCodeController,
+                      hint: 'CWG27MDCRB'),
                   const SizedBox(height: 14),
 
-                  _buildField('Shop Address', _shopAddressController,
-                      hint: '42 Fuchsia St., De Nacia VIII 4, Brgy. Sauyo, QC'),
+                  _buildDateField('Contract Date', _contractDateController),
                   const SizedBox(height: 14),
 
-                  _buildLabel('Shop Type'),
+                  _buildDateField('Delivery Date', _deliveryDateController),
+                  const SizedBox(height: 14),
+
+                  _buildDateField(
+                      'Installation Date', _installationDateController),
+                  const SizedBox(height: 14),
+
+                  _buildField('Purchase Order', _purchaseOrderController,
+                      hint: 'Enter PO Order'),
+                  const SizedBox(height: 14),
+
+                  _buildField('Delivery Receipt', _deliveryReceiptController,
+                      hint: 'Enter DR Order'),
+                  const SizedBox(height: 14),
+
+                  _buildLabel('Supplier Type'),
                   const SizedBox(height: 6),
-                  _buildDropdown(),
+                  _buildDropdown(
+                    value: _supplierType,
+                    items: _supplierTypes,
+                    hint: 'Select Supplier Type',
+                    onChanged: (v) => setState(() => _supplierType = v),
+                  ),
                   const SizedBox(height: 14),
 
-                  _buildField('Pin Coordinates', _pinCoordinatesController,
-                      hint: '14.6888888888888888123123.',
-                      keyboardType: TextInputType.text),
-                  const SizedBox(height: 14),
-
-                  _buildField('Google Maps Link', _googleMapsController,
-                      hint: 'https://maps.app.goo.gl/Lfoqiwqel23'),
-                  const SizedBox(height: 14),
-
-                  _buildField('Contact Person Name', _contactPersonController,
-                      hint: 'Glenda Valeroso'),
-                  const SizedBox(height: 14),
-
-                  _buildField('Contact No.', _contactNoController,
-                      hint: '0966-135-9282',
-                      keyboardType: TextInputType.phone),
-                  const SizedBox(height: 14),
-
-                  _buildField('Viber No.', _viberNoController,
-                      hint: '0966-135-9282',
-                      keyboardType: TextInputType.phone),
-                  const SizedBox(height: 14),
-
-                  _buildField('Email Address', _emailController,
-                      hint: 'glendavaleroso25@gmail.com',
-                      keyboardType: TextInputType.emailAddress),
+                  _buildLabel('Employee Name'),
+                  const SizedBox(height: 6),
+                  _buildDropdown(
+                    value: _employeeName,
+                    items: _employeeNames,
+                    hint: 'Select Employee',
+                    onChanged: (v) => setState(() => _employeeName = v),
+                  ),
                   const SizedBox(height: 14),
 
                   _buildField('Notes', _notesController,
@@ -169,7 +185,7 @@ class _EditShopScreenState extends State<EditShopScreen> {
                   ),
                 );
                 if (confirmed == true) {
-                  // TODO: save shop data
+                  // TODO: save product data
                   Navigator.pop(context);
                 }
               },
@@ -184,10 +200,7 @@ class _EditShopScreenState extends State<EditShopScreen> {
               ),
               child: const Text(
                 'Save Changes',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
-                ),
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
               ),
             ),
           ),
@@ -252,7 +265,50 @@ class _EditShopScreenState extends State<EditShopScreen> {
     );
   }
 
-  Widget _buildDropdown() {
+  Widget _buildDateField(String label, TextEditingController controller) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildLabel(label),
+        const SizedBox(height: 6),
+        TextField(
+          controller: controller,
+          readOnly: true,
+          style: const TextStyle(fontSize: 14, color: Colors.black87),
+          decoration: InputDecoration(
+            hintText: 'MM/DD/YYYY',
+            hintStyle: TextStyle(color: Colors.grey[400], fontSize: 14),
+            filled: true,
+            fillColor: Colors.white,
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+            suffixIcon: Icon(Icons.calendar_month, color: Colors.grey[600]),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: BorderSide(color: Colors.grey[300]!),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: BorderSide(color: Colors.grey[300]!),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide:
+                  const BorderSide(color: Color(0xFF2563EB), width: 1.5),
+            ),
+          ),
+          onTap: () => _pickDate(controller),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDropdown({
+    required String? value,
+    required List<String> items,
+    required String hint,
+    required ValueChanged<String?> onChanged,
+  }) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14),
       decoration: BoxDecoration(
@@ -262,21 +318,19 @@ class _EditShopScreenState extends State<EditShopScreen> {
       ),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<String>(
-          value: _shopType,
+          value: value,
           isExpanded: true,
-          hint: Text(
-            'Select Shop Type',
-            style: TextStyle(color: Colors.grey[400], fontSize: 14),
-          ),
-          items: _shopTypes
-              .map((type) => DropdownMenuItem(
-                    value: type,
-                    child: Text(type,
+          hint: Text(hint,
+              style: TextStyle(color: Colors.grey[400], fontSize: 14)),
+          items: items
+              .map((item) => DropdownMenuItem(
+                    value: item,
+                    child: Text(item,
                         style: const TextStyle(
                             fontSize: 14, color: Colors.black87)),
                   ))
               .toList(),
-          onChanged: (value) => setState(() => _shopType = value),
+          onChanged: onChanged,
         ),
       ),
     );

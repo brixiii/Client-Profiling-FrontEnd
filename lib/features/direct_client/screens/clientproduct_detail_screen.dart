@@ -1,6 +1,8 @@
 ﻿import 'package:flutter/material.dart';
 import '../../../shared/widgets/custom_app_bar.dart';
 import 'edit_shop_screen.dart';
+import 'productdetailsentities_screen.dart';
+import 'services_entities_screen.dart';
 import 'screens/add_client/add_buttons_screen.dart';
 
 class ClientDetailScreen extends StatelessWidget {
@@ -145,8 +147,34 @@ class ClientDetailScreen extends StatelessWidget {
               const SizedBox(width: 12),
               Expanded(
                 child: ElevatedButton.icon(
-                  onPressed: () {
-                    // TODO: implement delete
+                  onPressed: () async {
+                    final confirmed = await showDialog<bool>(
+                      context: context,
+                      builder: (context) => AlertDialog(
+                        title: const Text('Delete Product'),
+                        content: const Text(
+                            'Are you sure you want to delete this product? This action cannot be undone.'),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(context, false),
+                            child: const Text('Cancel'),
+                          ),
+                          ElevatedButton(
+                            onPressed: () => Navigator.pop(context, true),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFFEF4444),
+                              foregroundColor: Colors.white,
+                              elevation: 0,
+                            ),
+                            child: const Text('Delete'),
+                          ),
+                        ],
+                      ),
+                    );
+                    if (confirmed == true) {
+                      // TODO: implement delete
+                      Navigator.pop(context);
+                    }
                   },
                   icon: const Icon(Icons.delete, color: Colors.white, size: 18),
                   label: const Text(
@@ -232,11 +260,11 @@ class ClientDetailScreen extends StatelessWidget {
           const SizedBox(height: 10),
 
           // Table header
-          _buildTableHeader(const ['Model Name', 'Purchase Order']),
+          _buildTableHeader(const ['Model Name', 'Purchase Order', 'Actions']),
 
           // Data rows
           ..._products.map(
-            (p) => _buildTableRow([p['modelName']!, p['purchaseOrder']!]),
+            (p) => _buildProductRow(context, p),
           ),
 
           // Pagination footer
@@ -305,11 +333,11 @@ class ClientDetailScreen extends StatelessWidget {
 
           // Table header
           _buildTableHeader(
-              const ['Service Order\nReport No.', 'Service Type']),
+              const ['Service Order\nReport No.', 'Service Type', 'Actions']),
 
           // Data rows
           ..._services.map(
-            (s) => _buildTableRow([s['reportNo']!, s['serviceType']!]),
+            (s) => _buildServiceRow(context, s),
           ),
 
           // Pagination footer
@@ -381,21 +409,166 @@ class ClientDetailScreen extends StatelessWidget {
     );
   }
 
+  Widget _buildProductRow(BuildContext context, Map<String, String> p) {
+    return Container(
+      decoration: BoxDecoration(
+        border: Border(bottom: BorderSide(color: Colors.grey[100]!)),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
+              child: Text(p['modelName']!,
+                  style: const TextStyle(fontSize: 12, color: Colors.black87)),
+            ),
+          ),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
+              child: Text(p['purchaseOrder']!,
+                  style: const TextStyle(fontSize: 12, color: Colors.black87)),
+            ),
+          ),
+          SizedBox(
+            width: 80,
+            child: Center(
+              child: OutlinedButton(
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => ProductDetailsEntitiesScreen(product: p),
+                    ),
+                  );
+                },
+                style: OutlinedButton.styleFrom(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+                  side: const BorderSide(color: Color(0xFF2563EB)),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(6)),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  mainAxisSize: MainAxisSize.min,
+                  children: const [
+                    Icon(Icons.visibility_outlined,
+                        size: 14, color: Color(0xFF2563EB)),
+                    SizedBox(width: 3),
+                    Text('View',
+                        style: TextStyle(
+                            fontSize: 12,
+                            color: Color(0xFF2563EB),
+                            fontWeight: FontWeight.w600)),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildServiceRow(BuildContext context, Map<String, String> s) {
+    return Container(
+      decoration: BoxDecoration(
+        border: Border(bottom: BorderSide(color: Colors.grey[100]!)),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
+              child: Text(s['reportNo']!,
+                  style: const TextStyle(fontSize: 12, color: Colors.black87)),
+            ),
+          ),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
+              child: Text(s['serviceType']!,
+                  style: const TextStyle(fontSize: 12, color: Colors.black87)),
+            ),
+          ),
+          SizedBox(
+            width: 80,
+            child: Center(
+              child: OutlinedButton(
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => ServicesEntitiesScreen(
+                        service: s,
+                        shopName: client['shop'] ?? '3J\'s Laundry',
+                      ),
+                    ),
+                  );
+                },
+                style: OutlinedButton.styleFrom(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+                  side: const BorderSide(color: Color(0xFF2563EB)),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(6)),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  mainAxisSize: MainAxisSize.min,
+                  children: const [
+                    Icon(Icons.visibility_outlined,
+                        size: 14, color: Color(0xFF2563EB)),
+                    SizedBox(width: 3),
+                    Text('View',
+                        style: TextStyle(
+                            fontSize: 12,
+                            color: Color(0xFF2563EB),
+                            fontWeight: FontWeight.w600)),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildTableHeader(List<String> columns) {
     return Container(
       decoration: BoxDecoration(
+        color: Colors.grey[50],
         border: Border.symmetric(
           horizontal: BorderSide(color: Colors.grey[200]!),
         ),
       ),
       child: Row(
-        children: columns.map((col) {
-          return Expanded(
+        children: [
+          // All columns except the last are Expanded
+          ...columns.sublist(0, columns.length - 1).map((col) => Expanded(
+                child: Padding(
+                  padding:
+                      const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+                  child: Text(
+                    col,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.black87,
+                    ),
+                  ),
+                ),
+              )),
+          // Last column ("Actions") is fixed width to align with View button
+          SizedBox(
+            width: 80,
             child: Padding(
-              padding:
-                  const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+              padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
               child: Text(
-                col,
+                columns.last,
+                textAlign: TextAlign.center,
                 style: const TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w700,
@@ -403,8 +576,8 @@ class ClientDetailScreen extends StatelessWidget {
                 ),
               ),
             ),
-          );
-        }).toList(),
+          ),
+        ],
       ),
     );
   }

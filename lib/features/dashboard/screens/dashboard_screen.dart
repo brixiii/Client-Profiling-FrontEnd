@@ -744,8 +744,39 @@ class _DashboardScreenState extends State<DashboardScreen>
                   // Edit / Save profile button
                   Expanded(
                     child: ElevatedButton.icon(
-                      onPressed: () {
-                        setState(() => _isEditing = !_isEditing);
+                      onPressed: () async {
+                        if (_isEditing) {
+                          final confirmed = await showDialog<bool>(
+                            context: context,
+                            builder: (context) => AlertDialog(
+                              title: const Text('Save Changes'),
+                              content: const Text(
+                                  'Are you sure you want to save these changes?'),
+                              actions: [
+                                TextButton(
+                                  onPressed: () =>
+                                      Navigator.pop(context, false),
+                                  child: const Text('Cancel'),
+                                ),
+                                ElevatedButton(
+                                  onPressed: () =>
+                                      Navigator.pop(context, true),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: const Color(0xFF2563EB),
+                                    foregroundColor: Colors.white,
+                                    elevation: 0,
+                                  ),
+                                  child: const Text('Confirm'),
+                                ),
+                              ],
+                            ),
+                          );
+                          if (confirmed == true) {
+                            setState(() => _isEditing = false);
+                          }
+                        } else {
+                          setState(() => _isEditing = true);
+                        }
                       },
                       icon: Icon(
                         _isEditing ? Icons.save_outlined : Icons.edit_outlined,

@@ -172,15 +172,43 @@ class _ServiceTypeScreenState extends State<ServiceTypeScreen> {
                       borderRadius:
                           BorderRadius.vertical(top: Radius.circular(3)),
                     ),
-                    padding: const EdgeInsets.symmetric(
-                        vertical: 12, horizontal: 16),
-                    child: const Text(
-                      'Service Type',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontWeight: FontWeight.w600,
-                        fontSize: 13,
-                        color: Colors.black87,
+                    child: IntrinsicHeight(
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                  vertical: 12, horizontal: 16),
+                              child: const Text(
+                                'Service Type',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 13,
+                                  color: Colors.black87,
+                                ),
+                              ),
+                            ),
+                          ),
+                          const VerticalDivider(
+                              width: 1, thickness: 1, color: Color(0xFFCCCCCC)),
+                          SizedBox(
+                            width: 80,
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                  vertical: 12, horizontal: 8),
+                              child: const Text(
+                                'Actions',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 13,
+                                  color: Colors.black87,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ),
@@ -214,17 +242,72 @@ class _ServiceTypeScreenState extends State<ServiceTypeScreen> {
                                 ),
                               );
                             },
-                            child: Container(
-                              width: double.infinity,
-                              padding: const EdgeInsets.symmetric(
-                                  vertical: 14, horizontal: 16),
-                              child: Text(
-                                item.name,
-                                textAlign: TextAlign.center,
-                                style: const TextStyle(
-                                  fontSize: 13,
-                                  color: Colors.black87,
-                                ),
+                            child: IntrinsicHeight(
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    child: Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                          vertical: 14, horizontal: 16),
+                                      child: Text(
+                                        item.name,
+                                        textAlign: TextAlign.center,
+                                        style: const TextStyle(
+                                          fontSize: 13,
+                                          color: Colors.black87,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  const VerticalDivider(
+                                      width: 1,
+                                      thickness: 1,
+                                      color: Color(0xFFCCCCCC)),
+                                  SizedBox(
+                                    width: 80,
+                                    child: Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                          vertical: 10, horizontal: 6),
+                                      child: OutlinedButton(
+                                        onPressed: () {
+                                          Navigator.of(context).push(
+                                            MaterialPageRoute(
+                                              builder: (_) =>
+                                                  ServiceTypeDetailScreen(
+                                                      item: item),
+                                            ),
+                                          );
+                                        },
+                                        style: OutlinedButton.styleFrom(
+                                          padding: const EdgeInsets.symmetric(
+                                              horizontal: 4, vertical: 4),
+                                          side: const BorderSide(
+                                              color: Color(0xFF2563EB)),
+                                          shape: RoundedRectangleBorder(
+                                              borderRadius:
+                                                  BorderRadius.circular(4)),
+                                        ),
+                                        child: Row(
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.center,
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: const [
+                                            Icon(Icons.visibility_outlined,
+                                                size: 13,
+                                                color: Color(0xFF2563EB)),
+                                            SizedBox(width: 3),
+                                            Text('View',
+                                                style: TextStyle(
+                                                    fontSize: 11,
+                                                    color: Color(0xFF2563EB),
+                                                    fontWeight:
+                                                        FontWeight.w600)),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
                           ),

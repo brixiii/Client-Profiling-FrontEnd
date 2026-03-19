@@ -544,7 +544,12 @@ class _AddButtonsScreenState extends State<AddButtonsScreen> {
                             width: 28,
                             child: Column(
                               children: [
-                                _buildStepIndicator(step, activeColor),
+                                GestureDetector(
+                                  onTap: step <= currentStep
+                                      ? () => setState(() => currentStep = step)
+                                      : null,
+                                  child: _buildStepIndicator(step, activeColor),
+                                ),
                                 if (!isLast)
                                   Expanded(
                                     child: Center(
@@ -591,7 +596,7 @@ class _AddButtonsScreenState extends State<AddButtonsScreen> {
               Align(
                 alignment: Alignment.centerRight,
                 child: ElevatedButton(
-                  onPressed: _nextStep,
+                  onPressed: isLastStep ? _showConfirmDialog : _nextStep,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF2563EB),
                     foregroundColor: Colors.white,
@@ -612,7 +617,7 @@ class _AddButtonsScreenState extends State<AddButtonsScreen> {
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
-                  onPressed: _nextStep,
+                  onPressed: _showConfirmDialog,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFFFFC300),
                     foregroundColor: Colors.black,
@@ -647,6 +652,138 @@ class _AddButtonsScreenState extends State<AddButtonsScreen> {
               ),
           ],
         ),
+      ),
+    );
+  }
+
+  void _showConfirmDialog() {
+    List<Widget> rows;
+
+    switch (widget.mode) {
+      case AddMode.client:
+        final nameParts = [
+          _firstNameController.text,
+          _middleNameController.text,
+          _lastNameController.text,
+        ].where((s) => s.isNotEmpty).join(' ');
+        rows = [
+          _summaryRow('Name', nameParts.isEmpty ? '-' : nameParts),
+          _summaryRow('Company Name',
+              _companyNameController.text.isEmpty ? 'N/A' : _companyNameController.text),
+          _summaryRow('Email',
+              _emailController.text.isEmpty ? '-' : _emailController.text),
+          _summaryRow('Phone No.',
+              _phoneController.text.isEmpty ? '-' : _phoneController.text),
+        ];
+        break;
+      case AddMode.product:
+        rows = [
+          _summaryRow('Model Name', _modelName ?? '-'),
+          _summaryRow('Category Type', _categoryType ?? '-'),
+          _summaryRow('Machine Type', _machineType ?? '-'),
+          _summaryRow('Model Code', _modelCode ?? '-'),
+          _summaryRow('UOM', _uom ?? '-'),
+          _summaryRow('Quantity', _quantityController.text),
+          _summaryRow('Purchase Order',
+              _purchaseOrderController.text.isEmpty ? '-' : _purchaseOrderController.text),
+        ];
+        break;
+      case AddMode.service:
+        rows = [
+          _summaryRow('File', _chosenFileName ?? '-'),
+          _summaryRow('Sub Type', _subType ?? '-'),
+          _summaryRow('Service Type', _serviceType ?? '-'),
+          _summaryRow('Serial Number', _selectedSerialNumber ?? '-'),
+          _summaryRow('Spare Part', _selectedSparePart ?? '-'),
+          _summaryRow('Quantity', _serviceQuantityController.text),
+        ];
+        break;
+      case AddMode.shop:
+        rows = [
+          _summaryRow('Shop Name',
+              _shopNameController.text.isEmpty ? '-' : _shopNameController.text),
+          _summaryRow('Shop Address',
+              _shopAddressController.text.isEmpty ? '-' : _shopAddressController.text),
+          _summaryRow('Shop Type', _shopType ?? '-'),
+          _summaryRow('Contact Person',
+              _shopContactPersonController.text.isEmpty ? '-' : _shopContactPersonController.text),
+          _summaryRow('Contact No.',
+              _shopContactNoController.text.isEmpty ? '-' : _shopContactNoController.text),
+          _summaryRow('Email',
+              _shopContactEmailController.text.isEmpty ? '-' : _shopContactEmailController.text),
+        ];
+        break;
+    }
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => Container(
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        padding: EdgeInsets.fromLTRB(
+            24, 20, 24, MediaQuery.of(context).viewInsets.bottom + 32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: 20),
+                decoration: BoxDecoration(
+                  color: Colors.grey[300],
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            ...rows,
+            const SizedBox(height: 24),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: () {
+                  Navigator.pop(context); // close bottom sheet
+                  Navigator.pop(context); // go back to previous screen
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFFFFC300),
+                  foregroundColor: Colors.black,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8)),
+                  elevation: 0,
+                ),
+                child: const Text('Confirm',
+                    style: TextStyle(
+                        fontSize: 16, fontWeight: FontWeight.w700)),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _summaryRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label,
+              style: TextStyle(fontSize: 12, color: Colors.grey[500])),
+          const SizedBox(height: 2),
+          Text(value,
+              style: const TextStyle(
+                  fontSize: 15,
+                  color: Colors.black87,
+                  fontWeight: FontWeight.w500)),
+        ],
       ),
     );
   }

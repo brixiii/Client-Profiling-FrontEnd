@@ -106,9 +106,34 @@ class _EditOwnerScreenState extends State<EditOwnerScreen> {
             color: const Color(0xFFF5F7FA),
             padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
             child: ElevatedButton(
-              onPressed: () {
-                // TODO: save logic
-                Navigator.pop(context);
+              onPressed: () async {
+                final confirmed = await showDialog<bool>(
+                  context: context,
+                  builder: (context) => AlertDialog(
+                    title: const Text('Save Changes'),
+                    content: const Text(
+                        'Are you sure you want to save these changes?'),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(context, false),
+                        child: const Text('Cancel'),
+                      ),
+                      ElevatedButton(
+                        onPressed: () => Navigator.pop(context, true),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFFFFC300),
+                          foregroundColor: Colors.black,
+                          elevation: 0,
+                        ),
+                        child: const Text('Confirm'),
+                      ),
+                    ],
+                  ),
+                );
+                if (confirmed == true) {
+                  // TODO: save logic
+                  Navigator.pop(context);
+                }
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFFFFC300),

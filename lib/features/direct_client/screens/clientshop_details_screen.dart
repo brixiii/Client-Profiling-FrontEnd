@@ -101,7 +101,37 @@ class _ClientDetailsScreenState extends State<ClientDetailsScreen> {
                       const SizedBox(width: 12),
                       Expanded(
                         child: ElevatedButton.icon(
-                          onPressed: () {},
+                          onPressed: () async {
+                            final confirmed = await showDialog<bool>(
+                              context: context,
+                              builder: (context) => AlertDialog(
+                                title: const Text('Delete Client'),
+                                content: const Text(
+                                    'Are you sure you want to delete this client? This action cannot be undone.'),
+                                actions: [
+                                  TextButton(
+                                    onPressed: () =>
+                                        Navigator.pop(context, false),
+                                    child: const Text('Cancel'),
+                                  ),
+                                  ElevatedButton(
+                                    onPressed: () =>
+                                        Navigator.pop(context, true),
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: const Color(0xFFEF4444),
+                                      foregroundColor: Colors.white,
+                                      elevation: 0,
+                                    ),
+                                    child: const Text('Delete'),
+                                  ),
+                                ],
+                              ),
+                            );
+                            if (confirmed == true) {
+                              // TODO: delete logic
+                              Navigator.pop(context);
+                            }
+                          },
                           icon: const Icon(Icons.delete, color: Colors.white, size: 18),
                           label: const Text(
                             'Delete',
@@ -252,6 +282,19 @@ class _ClientDetailsScreenState extends State<ClientDetailsScreen> {
                             ),
                           ),
                         ),
+                        SizedBox(
+                          width: 80,
+                          child: Padding(
+                            padding: EdgeInsets.symmetric(
+                                vertical: 12, horizontal: 8),
+                            child: Text(
+                              'Actions',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                  fontWeight: FontWeight.w600, fontSize: 13),
+                            ),
+                          ),
+                        ),
                       ],
                     ),
                   ),
@@ -274,43 +317,73 @@ class _ClientDetailsScreenState extends State<ClientDetailsScreen> {
                       ),
                     )
                   else
-                    ...shops.map((shop) => InkWell(
-                          onTap: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) =>
-                                    ClientDetailScreen(client: widget.client),
-                              ),
-                            );
-                          },
-                          child: Container(
-                            decoration: BoxDecoration(
-                              border: Border(
-                                bottom:
-                                    BorderSide(color: Colors.grey[200]!, width: 1),
-                              ),
+                    ...shops.map((shop) => Container(
+                          decoration: BoxDecoration(
+                            border: Border(
+                              bottom:
+                                  BorderSide(color: Colors.grey[200]!, width: 1),
                             ),
-                            child: Row(
-                              children: [
-                                Expanded(
-                                  child: Padding(
-                                    padding: const EdgeInsets.symmetric(
-                                        vertical: 16, horizontal: 12),
-                                    child: Text(shop['shop']!,
-                                        style: const TextStyle(fontSize: 14)),
+                          ),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                      vertical: 16, horizontal: 12),
+                                  child: Text(shop['shop']!,
+                                      style: const TextStyle(fontSize: 14)),
+                                ),
+                              ),
+                              Expanded(
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                      vertical: 16, horizontal: 12),
+                                  child: Text(shop['contactPerson']!,
+                                      style: const TextStyle(fontSize: 14)),
+                                ),
+                              ),
+                              SizedBox(
+                                width: 80,
+                                child: Center(
+                                  child: OutlinedButton(
+                                    onPressed: () {
+                                      Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (_) => ClientDetailScreen(
+                                              client: widget.client),
+                                        ),
+                                      );
+                                    },
+                                    style: OutlinedButton.styleFrom(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 6, vertical: 6),
+                                      side: const BorderSide(
+                                          color: Color(0xFF2563EB)),
+                                      shape: RoundedRectangleBorder(
+                                          borderRadius:
+                                              BorderRadius.circular(4)),
+                                    ),
+                                    child: Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: const [
+                                        Icon(Icons.visibility_outlined,
+                                            size: 13,
+                                            color: Color(0xFF2563EB)),
+                                        SizedBox(width: 3),
+                                        Text('View',
+                                            style: TextStyle(
+                                                fontSize: 11,
+                                                color: Color(0xFF2563EB),
+                                                fontWeight: FontWeight.w600)),
+                                      ],
+                                    ),
                                   ),
                                 ),
-                                Expanded(
-                                  child: Padding(
-                                    padding: const EdgeInsets.symmetric(
-                                        vertical: 16, horizontal: 12),
-                                    child: Text(shop['contactPerson']!,
-                                        style: const TextStyle(fontSize: 14)),
-                                  ),
-                                ),
-                              ],
-                            ),
+                              ),
+                            ],
                           ),
                         )),
 

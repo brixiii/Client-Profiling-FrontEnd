@@ -1,5 +1,7 @@
 ﻿import 'package:flutter/material.dart';
 import '../../../shared/widgets/custom_app_bar.dart';
+import 'edit_reseller_screen.dart';
+import 'add_reseller/screens/add_product_screen.dart';
 
 class ResellerDetailScreen extends StatefulWidget {
   final Map<String, String> reseller;
@@ -186,7 +188,16 @@ class _ResellerDetailScreenState extends State<ResellerDetailScreen> {
                           children: [
                             Expanded(
                               child: ElevatedButton.icon(
-                                onPressed: () {},
+                                onPressed: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) => EditResellerScreen(
+                                        reseller: widget.reseller,
+                                      ),
+                                    ),
+                                  );
+                                },
                                 icon: const Icon(Icons.edit_outlined, size: 18),
                                 label: const Text('Edit'),
                                 style: ElevatedButton.styleFrom(
@@ -280,7 +291,16 @@ class _ResellerDetailScreenState extends State<ResellerDetailScreen> {
                           ],
                         ),
                         ElevatedButton.icon(
-                          onPressed: () {},
+                          onPressed: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => AddProductScreen(
+                                  reseller: widget.reseller,
+                                ),
+                              ),
+                            );
+                          },
                           icon: const Icon(Icons.add_rounded, size: 16),
                           label: const Text('Add Product'),
                           style: ElevatedButton.styleFrom(
@@ -395,6 +415,19 @@ class _ResellerDetailScreenState extends State<ResellerDetailScreen> {
                             ),
                           ),
                         ),
+                        SizedBox(
+                          width: 72,
+                          child: Text(
+                            'Actions',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.grey[600],
+                              letterSpacing: 0.3,
+                            ),
+                          ),
+                        ),
                       ],
                     ),
                   ),
@@ -451,6 +484,59 @@ class _ResellerDetailScreenState extends State<ResellerDetailScreen> {
                                 textAlign: TextAlign.center,
                                 style: TextStyle(
                                     fontSize: 13, color: Colors.grey[700]),
+                              ),
+                            ),
+                            SizedBox(
+                              width: 72,
+                              child: OutlinedButton(
+                                onPressed: () {
+                                  showDialog(
+                                    context: context,
+                                    builder: (_) => AlertDialog(
+                                      title: const Text('Product Detail'),
+                                      content: Column(
+                                        mainAxisSize: MainAxisSize.min,
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text('Model Name: ${product['modelName'] ?? ''}'),
+                                          const SizedBox(height: 8),
+                                          Text('Purchase Order: ${product['purchaseOrder'] ?? ''}'),
+                                        ],
+                                      ),
+                                      actions: [
+                                        TextButton(
+                                          onPressed: () => Navigator.pop(context),
+                                          child: const Text('Close'),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                },
+                                style: OutlinedButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 4, vertical: 4),
+                                  side: const BorderSide(
+                                      color: Color(0xFF2563EB)),
+                                  shape: RoundedRectangleBorder(
+                                      borderRadius:
+                                          BorderRadius.circular(4)),
+                                ),
+                                child: Row(
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.center,
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: const [
+                                    Icon(Icons.visibility_outlined,
+                                        size: 13,
+                                        color: Color(0xFF2563EB)),
+                                    SizedBox(width: 3),
+                                    Text('View',
+                                        style: TextStyle(
+                                            fontSize: 11,
+                                            color: Color(0xFF2563EB),
+                                            fontWeight: FontWeight.w600)),
+                                  ],
+                                ),
                               ),
                             ),
                           ],
