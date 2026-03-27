@@ -1,5 +1,10 @@
-﻿import 'package:flutter/material.dart';
+﻿import 'package:flutter/foundation.dart' show kIsWeb, debugPrint;
+import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
+import 'package:file_picker/file_picker.dart';
+import '../../../shared/api/backend_api.dart';
+import '../../../shared/models/user.dart';
+import '../../../shared/session_flags.dart';
 import '../../../shared/widgets/analytics_card.dart';
 import '../../../shared/widgets/animated_fade_slide.dart';
 import '../../../shared/widgets/app_drawer.dart';
@@ -20,6 +25,9 @@ class _DashboardScreenState extends State<DashboardScreen>
   // ── Profile panel state ──────────────────────────────────────────────────
   bool _profileVisible = false;
   bool _isEditing = false;
+  bool _isUploadingPhoto = false;
+  int _photoVersion = 0; // incremented after each upload to bust image cache
+  String? _uploadedPhotoUrl; // immediately set after upload for instant UI refresh
   late final TextEditingController _usernameCtrl;
   late final TextEditingController _addressCtrl;
   late final TextEditingController _phoneCtrl;
@@ -28,13 +36,21 @@ class _DashboardScreenState extends State<DashboardScreen>
   late final Animation<Offset> _slideAnim;
   late final Animation<double> _fadeAnim;
 
+  // ── Dashboard data ──────────────────────────────────────────────────────
+  final _api = BackendApi();
+  int _clientCount = 0;
+  int _productCount = 0;
+  int _servicesCount = 0;
+  int _shopsCount = 0;
+  User? _profileUser;
+
   @override
   void initState() {
     super.initState();
-    _usernameCtrl = TextEditingController(text: 'dev');
-    _addressCtrl  = TextEditingController(text: 'DEv');
-    _phoneCtrl    = TextEditingController(text: '0962-464-3757');
-    _emailCtrl    = TextEditingController(text: 'maryosepkaalvince@gmail.com');
+    _usernameCtrl = TextEditingController();
+    _addressCtrl  = TextEditingController();
+    _phoneCtrl    = TextEditingController();
+    _emailCtrl    = TextEditingController();
     _profileAnim = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 380),
@@ -48,6 +64,8 @@ class _DashboardScreenState extends State<DashboardScreen>
     _fadeAnim = Tween<double>(begin: 0, end: 1).animate(
       CurvedAnimation(parent: _profileAnim, curve: Curves.easeOut),
     );
+    _fetchCards();
+    _fetchProfile();
   }
 
   @override
@@ -58,6 +76,110 @@ class _DashboardScreenState extends State<DashboardScreen>
     _emailCtrl.dispose();
     _profileAnim.dispose();
     super.dispose();
+  }
+
+  // ── Helpers ─────────────────────────────────────────────────────────────
+  String get _profileFullName {
+    if (_profileUser == null) return '';
+    final parts = [
+      _profileUser!.firstname,
+      _profileUser!.middlename,
+      _profileUser!.surname,
+    ].where((p) => p.isNotEmpty).join(' ');
+    return parts.isNotEmpty ? parts : _profileUser!.name;
+  }
+
+  /// Returns the first non-null, non-empty photo URL (upload takes priority), or null.
+  String? get _currentPhotoUrl {
+    if (_uploadedPhotoUrl != null && _uploadedPhotoUrl!.isNotEmpty) {
+      return _uploadedPhotoUrl;
+    }
+    final url = _profileUser?.profilePhotoUrl;
+    if (url != null && url.isNotEmpty) return url;
+    return null;
+  }
+
+  // ── Data fetching ────────────────────────────────────────────────────────
+  Future<void> _fetchCards() async {
+    try {
+      final summary = await _api.getDashboardSummary();
+      if (!mounted) return;
+      setState(() {
+        _clientCount   = summary['total_clients']!;
+        _productCount  = summary['total_sold_products']!;
+        _servicesCount = summary['total_services']!;
+        _shopsCount    = summary['total_shops']!;
+      });
+    } catch (_) {
+      // Keep zeroed values on failure.
+    }
+  }
+
+  Future<void> _fetchProfile() async {
+    try {
+      final user = await _api.profile();
+      debugPrint('[Profile] photo url: ${user.profilePhotoUrl}');
+      if (!mounted) return;
+      setState(() {
+        _profileUser       = user;
+        _usernameCtrl.text = user.username;
+        _addressCtrl.text  = user.address;
+        _phoneCtrl.text    = user.phone;
+        _emailCtrl.text    = user.email;
+      });
+      // Share the fetched user with the drawer (no extra fetch needed anywhere).
+      SessionFlags.loggedInUser = user;
+    } catch (_) {
+      // Profile panel stays empty on failure; main screen is unaffected.
+    }
+  }
+
+  Future<void> _pickAndUploadPhoto() async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['jpg', 'jpeg', 'png', 'webp'],
+      withData: kIsWeb, // load bytes on web
+    );
+    if (result == null) return;
+    final file = result.files.single;
+    setState(() => _isUploadingPhoto = true);
+    try {
+      debugPrint('[ProfilePhoto] starting upload, filename: ${file.name}');
+      String? newUrl;
+      if (kIsWeb) {
+        final bytes = file.bytes;
+        if (bytes == null) return;
+        newUrl = await _api.uploadProfilePhotoBytes(bytes, file.name);
+      } else {
+        final path = file.path;
+        if (path == null) return;
+        debugPrint('[ProfilePhoto] selected file: $path');
+        newUrl = await _api.uploadProfilePhoto(path);
+      }
+      debugPrint('[ProfilePhoto] upload success, url: $newUrl');
+      // Immediately update the avatar without waiting for _fetchProfile.
+      if (mounted && newUrl != null && newUrl.isNotEmpty) {
+        setState(() {
+          _uploadedPhotoUrl = newUrl;
+          _photoVersion++;
+        });
+      }
+      await _fetchProfile();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Profile photo updated.')),
+        );
+      }
+    } catch (e) {
+      debugPrint('[ProfilePhoto] upload error: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Upload failed: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isUploadingPhoto = false);
+    }
   }
 
   /// Toggle the profile panel open / closed.
@@ -102,12 +224,41 @@ class _DashboardScreenState extends State<DashboardScreen>
               child: CircleAvatar(
                 radius: 18,
                 backgroundColor: Colors.black.withOpacity(0.08),
-                child: Icon(
-                  Icons.person_outline,
-                  size: 22,
-                  color: _profileVisible
-                      ? const Color(0xFF2563EB)
-                      : Colors.black87,
+                child: Builder(
+                  builder: (ctx) {
+                    final rawUrl = _currentPhotoUrl;
+                    debugPrint('[AppBarAvatar] _uploadedPhotoUrl: $_uploadedPhotoUrl');
+                    debugPrint('[AppBarAvatar] _profileUser?.profilePhotoUrl: ${_profileUser?.profilePhotoUrl}');
+                    final photoUrl = rawUrl != null ? '$rawUrl?v=$_photoVersion' : null;
+                    debugPrint('[AppBarAvatar] computed photoUrl: $photoUrl');
+                    return ClipOval(
+                      child: photoUrl != null
+                          ? Image.network(
+                              photoUrl,
+                              width: 36,
+                              height: 36,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, error, stack) {
+                                debugPrint('[AppBarAvatar] Image.network ERROR: $error');
+                                debugPrint('[AppBarAvatar] url was: $photoUrl');
+                                return Icon(
+                                  Icons.person_outline,
+                                  size: 22,
+                                  color: _profileVisible
+                                      ? const Color(0xFF2563EB)
+                                      : Colors.black87,
+                                );
+                              },
+                            )
+                          : Icon(
+                              Icons.person_outline,
+                              size: 22,
+                              color: _profileVisible
+                                  ? const Color(0xFF2563EB)
+                                  : Colors.black87,
+                            ),
+                    );
+                  },
                 ),
               ),
             ),
@@ -130,9 +281,11 @@ class _DashboardScreenState extends State<DashboardScreen>
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    'Welcome Back',
-                    style: TextStyle(
+                  Text(
+                    _profileUser != null
+                        ? 'Welcome Back, ${_profileUser!.firstname.isNotEmpty ? _profileUser!.firstname : _profileUser!.name}!'
+                        : 'Welcome Back!',
+                    style: const TextStyle(
                       fontSize: 20,
                       fontWeight: FontWeight.w600,
                       color: Colors.black87,
@@ -150,26 +303,26 @@ class _DashboardScreenState extends State<DashboardScreen>
                         shrinkWrap: true,
                         physics: const NeverScrollableScrollPhysics(),
                         childAspectRatio: 1.5,
-                        children: const [
+                        children: [
                           AnalyticsCard(
                             title: 'Client',
-                            value: '618',
-                            backgroundColor: Color(0xFFB3E5FC),
+                            value: '$_clientCount',
+                            backgroundColor: const Color(0xFFB3E5FC),
                           ),
                           AnalyticsCard(
                             title: 'Sold Product',
-                            value: '5,627',
-                            backgroundColor: Color(0xFFB3E5FC),
+                            value: '$_productCount',
+                            backgroundColor: const Color(0xFFB3E5FC),
                           ),
                           AnalyticsCard(
                             title: 'Total Services',
-                            value: '625',
-                            backgroundColor: Color(0xFFB3E5FC),
+                            value: '$_servicesCount',
+                            backgroundColor: const Color(0xFFB3E5FC),
                           ),
                           AnalyticsCard(
                             title: 'Shops',
-                            value: '601',
-                            backgroundColor: Color(0xFFB3E5FC),
+                            value: '$_shopsCount',
+                            backgroundColor: const Color(0xFFB3E5FC),
                           ),
                         ],
                       );
@@ -684,6 +837,11 @@ class _DashboardScreenState extends State<DashboardScreen>
   // ── Profile panel widget ─────────────────────────────────────────────────
   // Returns the floating card shown when the profile avatar is tapped
   Widget _buildProfilePanel() {
+    final rawUrl = _currentPhotoUrl;
+    debugPrint('[ProfilePanel] _uploadedPhotoUrl: $_uploadedPhotoUrl');
+    debugPrint('[ProfilePanel] _profileUser?.profilePhotoUrl: ${_profileUser?.profilePhotoUrl}');
+    final photoUrl = rawUrl != null ? '$rawUrl?v=$_photoVersion' : null;
+    debugPrint('[ProfilePanel] computed photoUrl: $photoUrl');
     return Material(
       color: Colors.transparent,
       child: Container(
@@ -725,16 +883,76 @@ class _DashboardScreenState extends State<DashboardScreen>
               ),
             ),
             // ── Profile avatar ────────────────────────────────────────
-            const CircleAvatar(
-              radius: 44,
-              backgroundColor: Color(0xFFE8F5E9),
-              child: Icon(Icons.person, size: 52, color: Colors.black54),
+            GestureDetector(
+              onTap: _isUploadingPhoto ? null : _pickAndUploadPhoto,
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  Container(
+                    width: 88,
+                    height: 88,
+                    decoration: const BoxDecoration(
+                      color: Color(0xFFE8F5E9),
+                      shape: BoxShape.circle,
+                    ),
+                    child: ClipOval(
+                      child: photoUrl != null
+                          ? Image.network(
+                              photoUrl,
+                              width: 88,
+                              height: 88,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, error, stack) {
+                                debugPrint('[ProfilePanel] Image.network ERROR: $error');
+                                debugPrint('[ProfilePanel] url was: $photoUrl');
+                                return const Icon(
+                                  Icons.person,
+                                  size: 52,
+                                  color: Colors.black54,
+                                );
+                              },
+                            )
+                          : const Icon(
+                              Icons.person,
+                              size: 52,
+                              color: Colors.black54,
+                            ),
+                    ),
+                  ),
+                  if (_isUploadingPhoto)
+                    const CircleAvatar(
+                      radius: 44,
+                      backgroundColor: Color(0x88000000),
+                      child: SizedBox(
+                        width: 24,
+                        height: 24,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2.5,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  if (!_isUploadingPhoto)
+                    Positioned(
+                      bottom: 2,
+                      right: 2,
+                      child: Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: const BoxDecoration(
+                          color: Color(0xFF2563EB),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.camera_alt, size: 14, color: Colors.white),
+                      ),
+                    ),
+                ],
+              ),
             ),
             const SizedBox(height: 12),
             // ── Full name ─────────────────────────────────────────────
-            const Text(
-              'Alvince Maryosep',
-              style: TextStyle(
+            Text(
+              _profileFullName,
+              style: const TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.w700,
                 color: Colors.black87,
@@ -742,9 +960,9 @@ class _DashboardScreenState extends State<DashboardScreen>
             ),
             const SizedBox(height: 4),
             // ── Email subtitle ────────────────────────────────────────
-            const Text(
-              'maryosepkaalvince@gmail.com',
-              style: TextStyle(fontSize: 13, color: Colors.black54),
+            Text(
+              _profileUser?.email ?? '',
+              style: const TextStyle(fontSize: 13, color: Colors.black54),
             ),
             const SizedBox(height: 20),
             // ── Info rows ─────────────────────────────────────────────
@@ -764,7 +982,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                   _isEditing
                       ? _buildEditRow('Email', _emailCtrl)
                       : _ProfileInfoRow(label: 'Email', value: _emailCtrl.text),
-                  const _ProfileInfoRow(label: 'Role', value: 'Admin'),
+                  _ProfileInfoRow(label: 'Role', value: _profileUser?.role ?? ''),
                 ],
               ),
             ),

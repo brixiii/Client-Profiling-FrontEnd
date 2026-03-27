@@ -1,8 +1,11 @@
 ﻿import 'package:flutter/material.dart';
 import '../../../shared/widgets/custom_app_bar.dart';
+import '../../../shared/models/employee.dart';
+import '../../../shared/api/backend_api.dart';
+import '../../../shared/api/api_exception.dart';
 
 class EditEmployeeScreen extends StatefulWidget {
-  final Map<String, String> employee;
+  final Employee employee;
 
   const EditEmployeeScreen({Key? key, required this.employee}) : super(key: key);
 
@@ -14,15 +17,15 @@ class _EditEmployeeScreenState extends State<EditEmployeeScreen> {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _fullNameController;
   String? _selectedRole;
+  bool _isSaving = false;
 
   final List<String> _roles = ['Super Admin', 'Admin', 'Salesperson', 'Technician'];
 
   @override
   void initState() {
     super.initState();
-    _fullNameController =
-        TextEditingController(text: widget.employee['name'] ?? '');
-    _selectedRole = widget.employee['position'];
+    _fullNameController = TextEditingController(text: widget.employee.name);
+    _selectedRole = widget.employee.role.isNotEmpty ? widget.employee.role : null;
   }
 
   @override
@@ -94,7 +97,7 @@ class _EditEmployeeScreenState extends State<EditEmployeeScreen> {
                 width: double.infinity,
                 height: 52,
                 child: ElevatedButton(
-                  onPressed: _submit,
+                  onPressed: _isSaving ? null : _submit,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFFFFC107),
                     foregroundColor: Colors.black87,
@@ -107,7 +110,13 @@ class _EditEmployeeScreenState extends State<EditEmployeeScreen> {
                       fontWeight: FontWeight.w600,
                     ),
                   ),
-                  child: const Text('Update Admin'),
+                  child: _isSaving
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Text('Update Employee'),
                 ),
               ),
             ),
@@ -117,12 +126,34 @@ class _EditEmployeeScreenState extends State<EditEmployeeScreen> {
     );
   }
 
-  void _submit() {
-    if (_formKey.currentState!.validate()) {
+  Future<void> _submit() async {
+    if (!_formKey.currentState!.validate()) return;
+    setState(() => _isSaving = true);
+    try {
+      await BackendApi().updateUser(
+        id: widget.employee.id,
+        payload: {
+          'name': _fullNameController.text.trim(),
+          'role': _selectedRole,
+        },
+      );
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Employee updated successfully')),
       );
-      Navigator.pop(context);
+      Navigator.pop(context, true);
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.message)),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Failed to update. Please try again.')),
+      );
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
     }
   }
 

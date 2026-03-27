@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../features/login/screens/login_screen.dart';
+import '../models/user.dart';
+import '../session_flags.dart';
 import '../../features/direct_client/screens/direct_client_screen.dart';
 import '../../features/dashboard/screens/dashboard_screen.dart';
 import '../../features/resellers/screens/resellers_screen.dart';
@@ -70,7 +72,7 @@ class _AppDrawerState extends State<AppDrawer> {
         child: ListView(
           padding: EdgeInsets.zero,
           children: [
-            // ── Branded drawer header ─────────────────────────────────
+            // ── Dynamic drawer header ─────────────────────────────────
             Container(
               width: double.infinity,
               padding: const EdgeInsets.fromLTRB(20, 52, 20, 20),
@@ -80,34 +82,33 @@ class _AppDrawerState extends State<AppDrawer> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Container(
-                    width: 48,
-                    height: 48,
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: const Icon(
-                      Icons.admin_panel_settings_outlined,
-                      size: 28,
+                  _DrawerAvatar(user: SessionFlags.loggedInUser),
+                  const SizedBox(height: 10),
+                  Text(
+                    _drawerDisplayName(SessionFlags.loggedInUser),
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.bold,
                       color: Colors.white,
+                      letterSpacing: 0.1,
                     ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 2),
                   const Text(
                     'Client Profiling',
                     style: TextStyle(
-                      fontSize: 17,
-                      fontWeight: FontWeight.bold,
+                      fontSize: 12,
                       color: Colors.white,
-                      letterSpacing: 0.2,
+                      fontWeight: FontWeight.w500,
                     ),
                   ),
-                  const SizedBox(height: 2),
+                  const SizedBox(height: 1),
                   Text(
                     'Management System',
                     style: TextStyle(
-                      fontSize: 12,
+                      fontSize: 11,
                       color: Colors.white.withOpacity(0.75),
                       fontWeight: FontWeight.w400,
                     ),
@@ -172,27 +173,29 @@ class _AppDrawerState extends State<AppDrawer> {
               },
             ),
 
-            // ── Inventory (collapsible) ───────────────────────────────
-            _InventoryDrawerItem(
-              isExpanded: _inventoryExpanded,
-              currentPage: page,
-              onToggle: () => setState(() => _inventoryExpanded = !_inventoryExpanded),
-              onSubItemTap: (label, screen) {
-                if (page != label) _navigate(context, screen);
-                else Navigator.pop(context);
-              },
-            ),
+            // ── Inventory (collapsible) — Super Admin only ──────────
+            if (SessionFlags.userRole == 'Super Admin')
+              _InventoryDrawerItem(
+                isExpanded: _inventoryExpanded,
+                currentPage: page,
+                onToggle: () => setState(() => _inventoryExpanded = !_inventoryExpanded),
+                onSubItemTap: (label, screen) {
+                  if (page != label) _navigate(context, screen);
+                  else Navigator.pop(context);
+                },
+              ),
 
-            // ── Admin ─────────────────────────────────────────────────
-            _DrawerMenuItem(
-              icon: Icons.admin_panel_settings_outlined,
-              label: 'Admin',
-              isSelected: page == 'Admin',
-              onTap: () {
-                if (page != 'Admin') _navigate(context, const AdminScreen());
-                else Navigator.pop(context);
-              },
-            ),
+            // ── Admin — Super Admin only ──────────────────────────────
+            if (SessionFlags.userRole == 'Super Admin')
+              _DrawerMenuItem(
+                icon: Icons.admin_panel_settings_outlined,
+                label: 'Admin',
+                isSelected: page == 'Admin',
+                onTap: () {
+                  if (page != 'Admin') _navigate(context, const AdminScreen());
+                  else Navigator.pop(context);
+                },
+              ),
 
             const Padding(
               padding: EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
@@ -202,6 +205,7 @@ class _AppDrawerState extends State<AppDrawer> {
               icon: Icons.logout,
               label: 'Logout',
               onTap: () {
+                SessionFlags.reset();
                 Navigator.pushAndRemoveUntil(
                   context,
                   PageRouteBuilder(
@@ -416,6 +420,58 @@ class _DrawerMenuItem extends StatelessWidget {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+// ── Drawer helper: build display name from User fields ────────────────────────
+String _drawerDisplayName(User? user) {
+  if (user == null) return '';
+  final parts = [user.firstname, user.middlename, user.surname]
+      .where((p) => p.isNotEmpty)
+      .join(' ');
+  return parts.isNotEmpty ? parts : user.name;
+}
+
+// ── Drawer profile avatar with network image + fallback ───────────────────────
+class _DrawerAvatar extends StatelessWidget {
+  final User? user;
+
+  const _DrawerAvatar({Key? key, this.user}) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    final photoUrl = user?.profilePhotoUrl;
+    return CircleAvatar(
+      radius: 26,
+      backgroundColor: Colors.white.withOpacity(0.3),
+      child: ClipOval(
+        child: photoUrl != null && photoUrl.isNotEmpty
+            ? Image.network(
+                photoUrl,
+                width: 52,
+                height: 52,
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => const Icon(
+                  Icons.person,
+                  size: 28,
+                  color: Colors.white,
+                ),
+                loadingBuilder: (_, child, loadingProgress) {
+                  if (loadingProgress == null) return child;
+                  return const Icon(
+                    Icons.person,
+                    size: 28,
+                    color: Colors.white,
+                  );
+                },
+              )
+            : const Icon(
+                Icons.person,
+                size: 28,
+                color: Colors.white,
+              ),
       ),
     );
   }

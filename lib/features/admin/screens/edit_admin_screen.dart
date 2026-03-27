@@ -1,10 +1,13 @@
 ﻿import 'package:flutter/material.dart';
 import '../../../shared/widgets/custom_app_bar.dart';
+import '../../../shared/models/user.dart';
+import '../../../shared/api/backend_api.dart';
+import '../../../shared/api/api_exception.dart';
 
 class EditAdminScreen extends StatefulWidget {
-  final Map<String, String> admin;
+  final User user;
 
-  const EditAdminScreen({Key? key, required this.admin}) : super(key: key);
+  const EditAdminScreen({Key? key, required this.user}) : super(key: key);
 
   @override
   State<EditAdminScreen> createState() => _EditAdminScreenState();
@@ -12,6 +15,7 @@ class EditAdminScreen extends StatefulWidget {
 
 class _EditAdminScreenState extends State<EditAdminScreen> {
   final _formKey = GlobalKey<FormState>();
+  bool _isSaving = false;
 
   late final TextEditingController _firstNameController;
   late final TextEditingController _middleNameController;
@@ -22,27 +26,21 @@ class _EditAdminScreenState extends State<EditAdminScreen> {
   late final TextEditingController _addressController;
 
   String? _selectedRole;
+  Map<String, String?> _apiErrors = {};
 
-  final List<String> _roles = ['Super Admin', 'Admin', 'Salesperson', 'Technician'];
+  final List<String> _roles = ['Super Admin', 'Admin'];
 
   @override
   void initState() {
     super.initState();
-    _firstNameController =
-        TextEditingController(text: widget.admin['firstName'] ?? '');
-    _middleNameController =
-        TextEditingController(text: widget.admin['middleName'] ?? 'N/A');
-    _lastNameController =
-        TextEditingController(text: widget.admin['lastName'] ?? '');
-    _usernameController =
-        TextEditingController(text: widget.admin['username'] ?? '');
-    _phoneController =
-        TextEditingController(text: widget.admin['phone'] ?? '');
-    _emailController =
-        TextEditingController(text: widget.admin['email'] ?? '');
-    _addressController =
-        TextEditingController(text: widget.admin['address'] ?? '');
-    _selectedRole = widget.admin['role'];
+    _firstNameController = TextEditingController(text: widget.user.firstname);
+    _middleNameController = TextEditingController(text: widget.user.middlename);
+    _lastNameController = TextEditingController(text: widget.user.surname);
+    _usernameController = TextEditingController(text: widget.user.username);
+    _phoneController = TextEditingController(text: widget.user.phone);
+    _emailController = TextEditingController(text: widget.user.email);
+    _addressController = TextEditingController(text: widget.user.address);
+    _selectedRole = widget.user.role.isNotEmpty ? widget.user.role : null;
   }
 
   @override
@@ -59,8 +57,6 @@ class _EditAdminScreenState extends State<EditAdminScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final role = widget.admin['role'] ?? 'Admin';
-
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: CustomAppBar(
@@ -79,7 +75,7 @@ class _EditAdminScreenState extends State<EditAdminScreen> {
           children: [
             // Heading
             Text(
-              'Edit $role',
+              'Edit ${widget.user.role}',
               style: const TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
@@ -89,7 +85,11 @@ class _EditAdminScreenState extends State<EditAdminScreen> {
             const SizedBox(height: 20),
 
             _buildLabel('First Name'),
-            _buildTextField(controller: _firstNameController),
+            _buildTextField(
+              controller: _firstNameController,
+              apiError: _apiErrors['firstname'],
+              onClearError: () => setState(() => _apiErrors.remove('firstname')),
+            ),
             const SizedBox(height: 14),
 
             _buildLabel('Middle Name'),
@@ -97,17 +97,27 @@ class _EditAdminScreenState extends State<EditAdminScreen> {
             const SizedBox(height: 14),
 
             _buildLabel('Last Name'),
-            _buildTextField(controller: _lastNameController),
+            _buildTextField(
+              controller: _lastNameController,
+              apiError: _apiErrors['surname'],
+              onClearError: () => setState(() => _apiErrors.remove('surname')),
+            ),
             const SizedBox(height: 14),
 
             _buildLabel('Username'),
-            _buildTextField(controller: _usernameController),
+            _buildTextField(
+              controller: _usernameController,
+              apiError: _apiErrors['username'],
+              onClearError: () => setState(() => _apiErrors.remove('username')),
+            ),
             const SizedBox(height: 14),
 
             _buildLabel('Phone No.'),
             _buildTextField(
               controller: _phoneController,
               keyboardType: TextInputType.phone,
+              apiError: _apiErrors['phone'],
+              onClearError: () => setState(() => _apiErrors.remove('phone')),
             ),
             const SizedBox(height: 14),
 
@@ -115,6 +125,8 @@ class _EditAdminScreenState extends State<EditAdminScreen> {
             _buildTextField(
               controller: _emailController,
               keyboardType: TextInputType.emailAddress,
+              apiError: _apiErrors['email'],
+              onClearError: () => setState(() => _apiErrors.remove('email')),
             ),
             const SizedBox(height: 14),
 
@@ -124,15 +136,23 @@ class _EditAdminScreenState extends State<EditAdminScreen> {
               items: _roles
                   .map((r) => DropdownMenuItem(value: r, child: Text(r)))
                   .toList(),
-              onChanged: (v) => setState(() => _selectedRole = v),
+              onChanged: (v) => setState(() {
+                _selectedRole = v;
+                _apiErrors.remove('role');
+              }),
               validator: (v) => v == null ? 'Please select a role' : null,
-              decoration: _inputDecoration(),
+              decoration: _inputDecoration().copyWith(errorText: _apiErrors['role']),
               icon: const Icon(Icons.keyboard_arrow_down, color: Colors.grey),
             ),
             const SizedBox(height: 14),
 
             _buildLabel('Address'),
-            _buildTextField(controller: _addressController, maxLines: 2),
+            _buildTextField(
+              controller: _addressController,
+              maxLines: 2,
+              apiError: _apiErrors['address'],
+              onClearError: () => setState(() => _apiErrors.remove('address')),
+            ),
             const SizedBox(height: 32),
 
             // Update Admin button
@@ -140,7 +160,7 @@ class _EditAdminScreenState extends State<EditAdminScreen> {
               width: double.infinity,
               height: 52,
               child: ElevatedButton(
-                onPressed: _submit,
+                onPressed: _isSaving ? null : _submit,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFFFFC107),
                   foregroundColor: Colors.black87,
@@ -153,7 +173,13 @@ class _EditAdminScreenState extends State<EditAdminScreen> {
                     fontWeight: FontWeight.w600,
                   ),
                 ),
-                child: const Text('Update Admin'),
+                child: _isSaving
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Text('Update Admin'),
               ),
             ),
             const SizedBox(height: 24),
@@ -163,13 +189,44 @@ class _EditAdminScreenState extends State<EditAdminScreen> {
     );
   }
 
-  void _submit() {
-    if (_formKey.currentState!.validate()) {
-      // TODO: wire to backend when ready
+  Future<void> _submit() async {
+    if (!_formKey.currentState!.validate()) return;
+    setState(() => _isSaving = true);
+    try {
+      await BackendApi().updateUser(
+        id: widget.user.id,
+        payload: {
+          'firstname': _firstNameController.text.trim(),
+          'middlename': _middleNameController.text.trim(),
+          'surname': _lastNameController.text.trim(),
+          'username': _usernameController.text.trim(),
+          'phone': _phoneController.text.trim(),
+          'email': _emailController.text.trim(),
+          'role': _selectedRole,
+          'address': _addressController.text.trim(),
+        },
+      );
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Admin updated successfully')),
       );
-      Navigator.pop(context);
+      Navigator.pop(context, true);
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      if (e.fieldErrors.isNotEmpty) {
+        setState(() => _apiErrors = Map.from(e.fieldErrors));
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.message)),
+        );
+      }
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Failed to update. Please try again.')),
+      );
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
     }
   }
 
@@ -192,15 +249,18 @@ class _EditAdminScreenState extends State<EditAdminScreen> {
     TextInputType keyboardType = TextInputType.text,
     int maxLines = 1,
     bool required = true,
+    String? apiError,
+    VoidCallback? onClearError,
   }) {
     return TextFormField(
       controller: controller,
       keyboardType: keyboardType,
       maxLines: maxLines,
+      onChanged: onClearError != null ? (_) => onClearError() : null,
       validator: required
           ? (v) => (v == null || v.isEmpty) ? 'This field is required' : null
           : null,
-      decoration: _inputDecoration(),
+      decoration: _inputDecoration().copyWith(errorText: apiError),
     );
   }
 

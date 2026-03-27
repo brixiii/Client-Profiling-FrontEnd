@@ -3,6 +3,9 @@ import 'package:flutter/material.dart';
 import '../../../theme/colors.dart';
 import '../../../shared/widgets/custom_text_field.dart';
 import '../../../shared/widgets/animated_fade_slide.dart';
+import '../../../shared/api/backend_api.dart';
+import '../../../shared/session_flags.dart';
+import '../../../shared/api/api_exception.dart';
 import '../../reset_password/screens/reset_password_screen.dart';
 import '../../dashboard/screens/dashboard_screen.dart';
 import '../../preloader/widgets/washing_loader.dart';
@@ -15,6 +18,7 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
+  final _api = BackendApi();
   final _usernameController = TextEditingController();
   final _passwordController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
@@ -23,19 +27,39 @@ class _LoginScreenState extends State<LoginScreen> {
   Future<void> _handleLogin() async {
     if (!(_formKey.currentState?.validate() ?? false)) return;
     setState(() => _isLoading = true);
-    // Simulate network / auth delay — replace with your real auth call here.
-    await Future.delayed(const Duration(seconds: 3));
-    if (!mounted) return;
-    Navigator.of(context).pushReplacement(
-      PageRouteBuilder(
-        pageBuilder: (_, __, ___) => const DashboardScreen(),
-        transitionDuration: const Duration(milliseconds: 450),
-        transitionsBuilder: (_, anim, __, child) => FadeTransition(
-          opacity: CurvedAnimation(parent: anim, curve: Curves.easeIn),
-          child: child,
+    try {
+      final user = await _api.login(
+        identifier: _usernameController.text.trim(),
+        password: _passwordController.text,
+      );
+      SessionFlags.userRole = user.role;
+
+      if (!mounted) return;
+      Navigator.of(context).pushReplacement(
+        PageRouteBuilder(
+          pageBuilder: (_, __, ___) => const DashboardScreen(),
+          transitionDuration: const Duration(milliseconds: 450),
+          transitionsBuilder: (_, anim, __, child) => FadeTransition(
+            opacity: CurvedAnimation(parent: anim, curve: Curves.easeIn),
+            child: child,
+          ),
         ),
-      ),
-    );
+      );
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.message)),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Unable to login. Please try again.')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
   }
 
   @override
@@ -48,12 +72,12 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     final screenHeight = MediaQuery.of(context).size.height;
-    final screenWidth  = MediaQuery.of(context).size.width;
+    final screenWidth = MediaQuery.of(context).size.width;
 
     // Responsive values
     final titleFontSize = (screenWidth * 0.10).clamp(26.0, 44.0);
-    final topPadding    = max(36.0, screenHeight * 0.07);
-    final cardPadding   = screenWidth < 400 ? 20.0 : 28.0;
+    final topPadding = max(36.0, screenHeight * 0.07);
+    final cardPadding = screenWidth < 400 ? 20.0 : 28.0;
 
     return Stack(
       children: [
@@ -88,7 +112,8 @@ class _LoginScreenState extends State<LoginScreen> {
                           child: Column(
                             children: [
                               Padding(
-                                padding: EdgeInsets.only(top: topPadding, bottom: 4.0),
+                                padding: EdgeInsets.only(
+                                    top: topPadding, bottom: 4.0),
                                 child: Text(
                                   'Client Profiling',
                                   style: TextStyle(
@@ -131,163 +156,176 @@ class _LoginScreenState extends State<LoginScreen> {
                             duration: const Duration(milliseconds: 460),
                             child: Center(
                               child: SingleChildScrollView(
-                              child: ConstrainedBox(
-                                constraints: const BoxConstraints(maxWidth: 480),
-                                child: Container(
-                                margin: const EdgeInsets.symmetric(horizontal: 20),
-                                padding: EdgeInsets.all(cardPadding),
-                                decoration: BoxDecoration(
-                                  color: Colors.white.withOpacity(0.93),
-                                  borderRadius: BorderRadius.circular(28),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: Colors.black.withOpacity(0.22),
-                                      blurRadius: 24,
-                                      offset: const Offset(0, 8),
-                                    ),
-                                    BoxShadow(
-                                      color: Colors.black.withOpacity(0.08),
-                                      blurRadius: 4,
-                                      offset: const Offset(0, 2),
-                                    ),
-                                  ],
-                                ),
-                                child: Form(
-                                  key: _formKey,
-                                  child: Column(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      // Welcome text
-                                      const Text(
-                                        'Welcome',
-                                        style: TextStyle(
-                                          fontSize: 26,
-                                          fontWeight: FontWeight.w700,
-                                          color: AppColors.textPrimary,
-                                          letterSpacing: -0.3,
+                                child: ConstrainedBox(
+                                  constraints:
+                                      const BoxConstraints(maxWidth: 480),
+                                  child: Container(
+                                    margin: const EdgeInsets.symmetric(
+                                        horizontal: 20),
+                                    padding: EdgeInsets.all(cardPadding),
+                                    decoration: BoxDecoration(
+                                      color: Colors.white.withOpacity(0.93),
+                                      borderRadius: BorderRadius.circular(28),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: Colors.black.withOpacity(0.22),
+                                          blurRadius: 24,
+                                          offset: const Offset(0, 8),
                                         ),
-                                      ),
-                                      const SizedBox(height: 8),
-                                      const Text(
-                                        'Sign in to your account',
-                                        style: TextStyle(
-                                          fontSize: 14,
-                                          color: AppColors.textSecondary,
-                                          fontWeight: FontWeight.w400,
+                                        BoxShadow(
+                                          color: Colors.black.withOpacity(0.08),
+                                          blurRadius: 4,
+                                          offset: const Offset(0, 2),
                                         ),
-                                      ),
-                                      const SizedBox(height: 28),
-
-                                      // Username field
-                                      CustomTextField(
-                                        hintText: 'Username/Phone no./Email',
-                                        icon: Icons.person_outline,
-                                        controller: _usernameController,
-                                        validator: (value) {
-                                          if (value?.isEmpty ?? true) {
-                                            return 'This field is required';
-                                          }
-                                          return null;
-                                        },
-                                      ),
-
-                                      // Password field
-                                      CustomTextField(
-                                        hintText: 'Password',
-                                        icon: Icons.lock_outline,
-                                        isPassword: true,
-                                        controller: _passwordController,
-                                        validator: (value) {
-                                          if (value?.isEmpty ?? true) {
-                                            return 'Password is required';
-                                          }
-                                          return null;
-                                        },
-                                      ),
-
-                                      // Forgot password link
-                                      Align(
-                                        alignment: Alignment.centerRight,
-                                        child: GestureDetector(
-                                          onTap: () {
-                                            Navigator.of(context).push(
-                                              MaterialPageRoute(
-                                                builder: (context) =>
-                                                    const ResetPasswordScreen(),
-                                              ),
-                                            );
-                                          },
-                                          child: const Text(
-                                            'Forgot Password?',
+                                      ],
+                                    ),
+                                    child: Form(
+                                      key: _formKey,
+                                      child: Column(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          // Welcome text
+                                          const Text(
+                                            'Welcome',
                                             style: TextStyle(
-                                              fontSize: 12,
-                                              color: AppColors.link,
-                                              fontWeight: FontWeight.w600,
+                                              fontSize: 26,
+                                              fontWeight: FontWeight.w700,
+                                              color: AppColors.textPrimary,
+                                              letterSpacing: -0.3,
                                             ),
                                           ),
-                                        ),
-                                      ),
-                                      const SizedBox(height: 28),
+                                          const SizedBox(height: 8),
+                                          const Text(
+                                            'Sign in to your account',
+                                            style: TextStyle(
+                                              fontSize: 14,
+                                              color: AppColors.textSecondary,
+                                              fontWeight: FontWeight.w400,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 28),
 
-                                      // Sign in button with gradient
-                                      SizedBox(
-                                        width: double.infinity,
-                                        child: Container(
-                                          decoration: BoxDecoration(
-                                            gradient: LinearGradient(
-                                              colors: [
-                                                AppColors.secondary,
-                                                AppColors.secondary.withOpacity(0.85),
-                                              ],
-                                              begin: Alignment.topLeft,
-                                              end: Alignment.bottomRight,
-                                            ),
-                                            borderRadius: BorderRadius.circular(24),
-                                            boxShadow: [
-                                              BoxShadow(
-                                                color: AppColors.secondary.withOpacity(0.3),
-                                                blurRadius: 12,
-                                                offset: const Offset(0, 4),
-                                              ),
-                                            ],
+                                          // Username field
+                                          CustomTextField(
+                                            hintText:
+                                                'Username/Phone no./Email',
+                                            icon: Icons.person_outline,
+                                            controller: _usernameController,
+                                            validator: (value) {
+                                              if (value?.isEmpty ?? true) {
+                                                return 'This field is required';
+                                              }
+                                              return null;
+                                            },
                                           ),
-                                          child: Material(
-                                            color: Colors.transparent,
-                                            child: InkWell(
-                                              onTap: _isLoading ? null : _handleLogin,
-                                              borderRadius: BorderRadius.circular(24),
-                                              child: const Padding(
-                                                padding: EdgeInsets.symmetric(
-                                                  vertical: 16,
-                                                  horizontal: 24,
+
+                                          // Password field
+                                          CustomTextField(
+                                            hintText: 'Password',
+                                            icon: Icons.lock_outline,
+                                            isPassword: true,
+                                            controller: _passwordController,
+                                            validator: (value) {
+                                              if (value?.isEmpty ?? true) {
+                                                return 'Password is required';
+                                              }
+                                              return null;
+                                            },
+                                          ),
+
+                                          // Forgot password link
+                                          Align(
+                                            alignment: Alignment.centerRight,
+                                            child: GestureDetector(
+                                              onTap: () {
+                                                Navigator.of(context).push(
+                                                  MaterialPageRoute(
+                                                    builder: (context) =>
+                                                        const ResetPasswordScreen(),
+                                                  ),
+                                                );
+                                              },
+                                              child: const Text(
+                                                'Forgot Password?',
+                                                style: TextStyle(
+                                                  fontSize: 12,
+                                                  color: AppColors.link,
+                                                  fontWeight: FontWeight.w600,
                                                 ),
-                                                child: Row(
-                                                  mainAxisAlignment: MainAxisAlignment.center,
-                                                  children: [
-                                                    Text(
-                                                      'Sign In',
-                                                      style: TextStyle(
-                                                        fontSize: 16,
-                                                        fontWeight: FontWeight.w700,
-                                                        color: Colors.white,
-                                                        letterSpacing: 0.5,
-                                                      ),
-                                                    ),
+                                              ),
+                                            ),
+                                          ),
+                                          const SizedBox(height: 28),
+
+                                          // Sign in button with gradient
+                                          SizedBox(
+                                            width: double.infinity,
+                                            child: Container(
+                                              decoration: BoxDecoration(
+                                                gradient: LinearGradient(
+                                                  colors: [
+                                                    AppColors.secondary,
+                                                    AppColors.secondary
+                                                        .withOpacity(0.85),
                                                   ],
+                                                  begin: Alignment.topLeft,
+                                                  end: Alignment.bottomRight,
+                                                ),
+                                                borderRadius:
+                                                    BorderRadius.circular(24),
+                                                boxShadow: [
+                                                  BoxShadow(
+                                                    color: AppColors.secondary
+                                                        .withOpacity(0.3),
+                                                    blurRadius: 12,
+                                                    offset: const Offset(0, 4),
+                                                  ),
+                                                ],
+                                              ),
+                                              child: Material(
+                                                color: Colors.transparent,
+                                                child: InkWell(
+                                                  onTap: _isLoading
+                                                      ? null
+                                                      : _handleLogin,
+                                                  borderRadius:
+                                                      BorderRadius.circular(24),
+                                                  child: const Padding(
+                                                    padding:
+                                                        EdgeInsets.symmetric(
+                                                      vertical: 16,
+                                                      horizontal: 24,
+                                                    ),
+                                                    child: Row(
+                                                      mainAxisAlignment:
+                                                          MainAxisAlignment
+                                                              .center,
+                                                      children: [
+                                                        Text(
+                                                          'Sign In',
+                                                          style: TextStyle(
+                                                            fontSize: 16,
+                                                            fontWeight:
+                                                                FontWeight.w700,
+                                                            color: Colors.white,
+                                                            letterSpacing: 0.5,
+                                                          ),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                  ),
                                                 ),
                                               ),
                                             ),
                                           ),
-                                        ),
+                                        ],
                                       ),
-                                    ],
+                                    ),
                                   ),
                                 ),
                               ),
                             ),
                           ),
-                        ),
-                        ),
                         ),
 
                         const SizedBox(height: 32),

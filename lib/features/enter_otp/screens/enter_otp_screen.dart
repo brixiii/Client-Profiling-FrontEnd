@@ -1,5 +1,7 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import '../../../theme/colors.dart';
+import '../../../shared/api/backend_api.dart';
+import '../../../shared/api/api_exception.dart';
 import '../../../shared/widgets/custom_text_field.dart';
 import '../../new_password/screens/new_password_screen.dart';
 
@@ -16,13 +18,71 @@ class EnterOtpScreen extends StatefulWidget {
 }
 
 class _EnterOtpScreenState extends State<EnterOtpScreen> {
+  final _api = BackendApi();
   final _otpController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
+  bool _isLoading = false;
+  bool _isResending = false;
 
   @override
   void dispose() {
     _otpController.dispose();
     super.dispose();
+  }
+
+  Future<void> _confirm() async {
+    if (!(_formKey.currentState?.validate() ?? false)) return;
+    setState(() => _isLoading = true);
+    try {
+      await _api.verifyOtpToken(
+        email: widget.email,
+        token: _otpController.text.trim(),
+      );
+      if (!mounted) return;
+      // Token is valid — proceed to the new password screen.
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => NewPasswordScreen(
+            email: widget.email,
+            token: _otpController.text.trim(),
+          ),
+        ),
+      );
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.message)),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Unable to verify code. Please try again.')),
+      );
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _resend() async {
+    setState(() => _isResending = true);
+    try {
+      await _api.forgotPassword(widget.email);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('A new OTP has been sent to your email.')),
+      );
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(e.message)));
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Unable to resend OTP. Please try again.')),
+      );
+    } finally {
+      if (mounted) setState(() => _isResending = false);
+    }
   }
 
   @override
@@ -37,7 +97,6 @@ class _EnterOtpScreenState extends State<EnterOtpScreen> {
             height: screenHeight - MediaQuery.of(context).padding.top,
             child: Column(
               children: [
-                // Enter OTP card
                 Expanded(
                   child: Center(
                     child: SingleChildScrollView(
@@ -65,7 +124,6 @@ class _EnterOtpScreenState extends State<EnterOtpScreen> {
                           child: Column(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              // Title
                               const Text(
                                 'Enter OTP',
                                 style: TextStyle(
@@ -75,11 +133,9 @@ class _EnterOtpScreenState extends State<EnterOtpScreen> {
                                   letterSpacing: -0.3,
                                 ),
                               ),
-                              const SizedBox(height: 24),
-
-                              // Info text
+                              const SizedBox(height: 16),
                               Text(
-                                'A 6-digit code has been sent to ${widget.email}',
+                                'A 6-digit code has been sent to\n${widget.email}',
                                 style: const TextStyle(
                                   fontSize: 13,
                                   color: AppColors.textSecondary,
@@ -87,31 +143,31 @@ class _EnterOtpScreenState extends State<EnterOtpScreen> {
                                 ),
                                 textAlign: TextAlign.center,
                               ),
-                              const SizedBox(height: 32),
-
-                              // OTP field
+                              const SizedBox(height: 28),
                               CustomTextField(
-                                hintText: 'Enter OTP sent',
+                                hintText: 'Enter 6-digit code',
                                 icon: Icons.mail_outline,
                                 controller: _otpController,
+                                keyboardType: TextInputType.number,
                                 validator: (value) {
-                                  if (value?.isEmpty ?? true) {
+                                  if (value == null || value.trim().isEmpty) {
                                     return 'OTP is required';
                                   }
-                                  if (value!.length < 6) {
-                                    return 'OTP must be 6 digits';
+                                  if (value.trim().length != 6) {
+                                    return 'OTP must be exactly 6 digits';
+                                  }
+                                  if (!RegExp(r'^\d{6}$').hasMatch(value.trim())) {
+                                    return 'OTP must contain digits only';
                                   }
                                   return null;
                                 },
                               ),
-
-                              // Back link
                               Align(
                                 alignment: Alignment.centerRight,
                                 child: GestureDetector(
-                                  onTap: () {
-                                    Navigator.of(context).pop();
-                                  },
+                                  onTap: (_isLoading || _isResending)
+                                      ? null
+                                      : () => Navigator.of(context).pop(),
                                   child: const Text(
                                     'Back',
                                     style: TextStyle(
@@ -123,73 +179,65 @@ class _EnterOtpScreenState extends State<EnterOtpScreen> {
                                 ),
                               ),
                               const SizedBox(height: 40),
-
-                              // Confirm button with gradient
-                              Container(
-                                decoration: BoxDecoration(
-                                  gradient: LinearGradient(
-                                    colors: [
-                                      AppColors.secondary,
-                                      AppColors.secondary.withOpacity(0.85),
-                                    ],
-                                    begin: Alignment.topLeft,
-                                    end: Alignment.bottomRight,
-                                  ),
-                                  borderRadius: BorderRadius.circular(24),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: AppColors.secondary
-                                          .withOpacity(0.3),
-                                      blurRadius: 12,
-                                      offset: const Offset(0, 4),
+                              SizedBox(
+                                width: double.infinity,
+                                child: Container(
+                                  decoration: BoxDecoration(
+                                    gradient: LinearGradient(
+                                      colors: [
+                                        AppColors.secondary,
+                                        AppColors.secondary.withOpacity(0.85),
+                                      ],
+                                      begin: Alignment.topLeft,
+                                      end: Alignment.bottomRight,
                                     ),
-                                  ],
-                                ),
-                                child: Material(
-                                  color: Colors.transparent,
-                                  child: InkWell(
-                                    onTap: () {
-                                      if (_formKey.currentState?.validate() ??
-                                          false) {
-                                        Navigator.of(context).push(
-                                          MaterialPageRoute(
-                                            builder: (context) =>
-                                                NewPasswordScreen(
-                                              email: widget.email,
-                                            ),
-                                          ),
-                                        );
-                                      }
-                                    },
                                     borderRadius: BorderRadius.circular(24),
-                                    child: const Padding(
-                                      padding: EdgeInsets.symmetric(
-                                        vertical: 14,
-                                        horizontal: 24,
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: AppColors.secondary.withOpacity(0.3),
+                                        blurRadius: 12,
+                                        offset: const Offset(0, 4),
                                       ),
-                                      child: Row(
-                                        mainAxisAlignment:
-                                            MainAxisAlignment.center,
-                                        children: [
-                                          Text(
-                                            'Confirm',
-                                            style: TextStyle(
-                                              fontSize: 16,
-                                              fontWeight: FontWeight.w700,
-                                              color: Colors.white,
-                                              letterSpacing: 0.3,
-                                            ),
-                                          ),
-                                        ],
+                                    ],
+                                  ),
+                                  child: Material(
+                                    color: Colors.transparent,
+                                    child: InkWell(
+                                      onTap: (_isLoading || _isResending)
+                                          ? null
+                                          : _confirm,
+                                      borderRadius: BorderRadius.circular(24),
+                                      child: Padding(
+                                        padding: const EdgeInsets.symmetric(
+                                          vertical: 14,
+                                          horizontal: 24,
+                                        ),
+                                        child: Center(
+                                          child: _isLoading
+                                              ? const SizedBox(
+                                                  width: 20,
+                                                  height: 20,
+                                                  child: CircularProgressIndicator(
+                                                    strokeWidth: 2,
+                                                    color: Colors.white,
+                                                  ),
+                                                )
+                                              : const Text(
+                                                  'Confirm',
+                                                  style: TextStyle(
+                                                    fontSize: 16,
+                                                    fontWeight: FontWeight.w700,
+                                                    color: Colors.white,
+                                                    letterSpacing: 0.3,
+                                                  ),
+                                                ),
+                                        ),
                                       ),
                                     ),
                                   ),
                                 ),
                               ),
-
                               const SizedBox(height: 16),
-
-                              // Resend OTP link
                               Row(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
@@ -201,22 +249,26 @@ class _EnterOtpScreenState extends State<EnterOtpScreen> {
                                     ),
                                   ),
                                   GestureDetector(
-                                    onTap: () {
-                                      ScaffoldMessenger.of(context)
-                                          .showSnackBar(
-                                        const SnackBar(
-                                          content: Text('OTP resent to email'),
-                                        ),
-                                      );
-                                    },
-                                    child: const Text(
-                                      'Resend',
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        color: AppColors.link,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
+                                    onTap: (_isResending || _isLoading)
+                                        ? null
+                                        : _resend,
+                                    child: _isResending
+                                        ? const SizedBox(
+                                            width: 14,
+                                            height: 14,
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 1.5,
+                                              color: AppColors.link,
+                                            ),
+                                          )
+                                        : const Text(
+                                            'Resend',
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              color: AppColors.link,
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                          ),
                                   ),
                                 ],
                               ),
@@ -227,7 +279,6 @@ class _EnterOtpScreenState extends State<EnterOtpScreen> {
                     ),
                   ),
                 ),
-
                 const SizedBox(height: 32),
               ],
             ),

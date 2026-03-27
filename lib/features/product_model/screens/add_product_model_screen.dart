@@ -1,8 +1,8 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import '../models/product_model.dart';
 import '../../../shared/widgets/custom_app_bar.dart';
 
-/// Screen 4 — Add a new Product Model.
+/// Screen â€” Add a new Product Model.
 /// Reached from the "+ Add Model" button in ProductModelScreen.
 class AddProductModelScreen extends StatefulWidget {
   const AddProductModelScreen({Key? key}) : super(key: key);
@@ -11,168 +11,194 @@ class AddProductModelScreen extends StatefulWidget {
   State<AddProductModelScreen> createState() => _AddProductModelScreenState();
 }
 
+// Supported model types
+const _modelTypes = ['Washer', 'Dryer', 'Styler'];
+
+// Label for the code field that corresponds to each model type
+String _codeLabel(String modelType) => '$modelType Code';
+String _codeHint(String modelType) => 'Enter $modelType Code';
+
 class _AddProductModelScreenState extends State<AddProductModelScreen> {
   final _formKey = GlobalKey<FormState>();
 
+  String? _selectedModel;
   final _nameController = TextEditingController();
-  final _washerController = TextEditingController();
-  final _dryerController = TextEditingController();
-  final _stylerController = TextEditingController();
-  final _paymentController = TextEditingController();
+  final _codeController = TextEditingController();
 
   @override
   void dispose() {
     _nameController.dispose();
-    _washerController.dispose();
-    _dryerController.dispose();
-    _stylerController.dispose();
-    _paymentController.dispose();
+    _codeController.dispose();
     super.dispose();
+  }
+
+  void _onModelChanged(String? value) {
+    setState(() {
+      _selectedModel = value;
+      _nameController.clear();
+      _codeController.clear();
+    });
   }
 
   void _submit() {
     if (!(_formKey.currentState?.validate() ?? false)) return;
 
-    // Build the new model — TODO: pass to real data layer
+    final washer =
+        _selectedModel == 'Washer' ? _codeController.text.trim() : '';
+    final dryer =
+        _selectedModel == 'Dryer' ? _codeController.text.trim() : '';
+    final styler =
+        _selectedModel == 'Styler' ? _codeController.text.trim() : '';
+
     final newModel = ProductModel(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
       name: _nameController.text.trim(),
       brand: '',
-      category: '',
+      category: _selectedModel ?? '',
       description: '',
-      washerCode: _washerController.text.trim(),
-      dryerCode: _dryerController.text.trim(),
-      stylerCode: _stylerController.text.trim(),
-      paymentSystem: _paymentController.text.trim(),
+      washerCode: washer,
+      dryerCode: dryer,
+      stylerCode: styler,
     );
 
-    // Return the new model to the calling screen
     Navigator.of(context).pop(newModel);
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F7FA),
-      appBar: CustomAppBar(title: 'Inventory', showMenuButton: false),
+      backgroundColor: Colors.white,
+      appBar: CustomAppBar(
+        title: 'Inventory',
+        showMenuButton: false,
+        actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: 4),
+            child: IconButton(
+              icon: const Icon(Icons.account_circle_outlined,
+                  color: Colors.black87),
+              onPressed: () {},
+            ),
+          ),
+        ],
+      ),
       body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(20),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // ── Section heading ──────────────────────────────────
-                const Text(
-                  'Add Product Model',
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w700,
-                    color: Colors.black87,
-                  ),
-                ),
-                const SizedBox(height: 24),
-
-                // ── Form card ────────────────────────────────────────
-                Container(
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(12),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.05),
-                        blurRadius: 8,
-                        offset: const Offset(0, 2),
-                      ),
-                    ],
-                  ),
+        child: Form(
+          key: _formKey,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Model Name
-                      _FieldLabel('Model Name'),
-                      _buildTextField(
-                        controller: _nameController,
-                        hint: 'Enter Model Name',
-                        validator: (v) =>
-                            (v?.isEmpty ?? true) ? 'Required' : null,
+                      // â”€â”€ Heading â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+                      const Text(
+                        'Add Product Model',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.black87,
+                        ),
                       ),
                       const SizedBox(height: 16),
 
-                      // Washer
-                      _FieldLabel('Washer'),
-                      _buildTextFieldWithPlus(
-                        controller: _washerController,
-                        hint: 'Enter Washer Code',
-                        onAdd: () {
-                          // TODO: open washer code picker
-                        },
-                      ),
-                      const SizedBox(height: 16),
+                      // â”€â”€ Select Model â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+                      _FieldLabel('Select Model'),
+                      _buildDropdown(),
 
-                      // Dryer
-                      _FieldLabel('Dryer'),
-                      _buildTextFieldWithPlus(
-                        controller: _dryerController,
-                        hint: 'Enter Dryer Code',
-                        onAdd: () {
-                          // TODO: open dryer code picker
-                        },
-                      ),
-                      const SizedBox(height: 16),
+                      // â”€â”€ Conditional fields â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+                      if (_selectedModel != null) ...[
+                        const SizedBox(height: 14),
+                        _FieldLabel('Model Name'),
+                        _buildTextField(
+                          controller: _nameController,
+                          hint: 'Enter Model Name',
+                          validator: (v) =>
+                              (v?.isEmpty ?? true) ? 'Required' : null,
+                        ),
+                        const SizedBox(height: 14),
+                        _FieldLabel(_codeLabel(_selectedModel!)),
+                        _buildTextField(
+                          controller: _codeController,
+                          hint: _codeHint(_selectedModel!),
+                        ),
+                      ],
 
-                      // Styler
-                      _FieldLabel('Styler'),
-                      _buildTextField(
-                        controller: _stylerController,
-                        hint: 'Enter Styler Code',
-                      ),
-                      const SizedBox(height: 16),
-
-                      // Payment System
-                      _FieldLabel('Payment System'),
-                      _buildTextField(
-                        controller: _paymentController,
-                        hint: 'Payment System Code',
-                      ),
+                      const SizedBox(height: 24),
                     ],
                   ),
                 ),
-                const SizedBox(height: 32),
+              ),
 
-                // ── Submit button ────────────────────────────────────
-                SizedBox(
+              // â”€â”€ Submit button â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+                child: SizedBox(
                   width: double.infinity,
                   height: 50,
                   child: ElevatedButton(
                     onPressed: _submit,
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFFF5A623),
+                      backgroundColor: const Color(0xFFF5C518),
                       foregroundColor: Colors.white,
                       elevation: 0,
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
+                        borderRadius: BorderRadius.circular(8),
                       ),
                     ),
                     child: const Text(
                       'Submit',
-                      style:
-                          TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white,
+                      ),
                     ),
                   ),
                 ),
-                const SizedBox(height: 20),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),
     );
   }
 
-  // ── Helpers ──────────────────────────────────────────────────────────────
+  // â”€â”€ Dropdown â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
+  Widget _buildDropdown() {
+    return Container(
+      height: 44,
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: const Color(0xFFD0D5DD)),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String>(
+          value: _selectedModel,
+          isExpanded: true,
+          hint: Text(
+            'Select Model Type',
+            style: TextStyle(fontSize: 13, color: Colors.grey[500]),
+          ),
+          icon: const Icon(Icons.keyboard_arrow_down,
+              color: Colors.black54, size: 20),
+          style: const TextStyle(fontSize: 13, color: Colors.black87),
+          items: _modelTypes
+              .map((t) => DropdownMenuItem(value: t, child: Text(t)))
+              .toList(),
+          onChanged: _onModelChanged,
+        ),
+      ),
+    );
+  }
+
+  // â”€â”€ Text field â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   Widget _buildTextField({
     required TextEditingController controller,
@@ -182,85 +208,41 @@ class _AddProductModelScreenState extends State<AddProductModelScreen> {
     return TextFormField(
       controller: controller,
       validator: validator,
+      style: const TextStyle(fontSize: 13, color: Colors.black87),
       decoration: InputDecoration(
         hintText: hint,
-        hintStyle: const TextStyle(fontSize: 13, color: Colors.black38),
-        filled: true,
-        fillColor: const Color(0xFFF5F7FA),
+        hintStyle: TextStyle(fontSize: 13, color: Colors.grey[400]),
+        filled: false,
         contentPadding:
-            const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-          borderSide: const BorderSide(color: Color(0xFFE0E0E0)),
+          borderRadius: BorderRadius.circular(6),
+          borderSide: const BorderSide(color: Color(0xFFD0D5DD)),
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-          borderSide: const BorderSide(color: Color(0xFFE0E0E0)),
+          borderRadius: BorderRadius.circular(6),
+          borderSide: const BorderSide(color: Color(0xFFD0D5DD)),
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(6),
           borderSide:
               const BorderSide(color: Color(0xFF2563EB), width: 1.5),
+        ),
+        errorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(6),
+          borderSide: const BorderSide(color: Color(0xFFE74C3C)),
+        ),
+        focusedErrorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(6),
+          borderSide: const BorderSide(
+              color: Color(0xFFE74C3C), width: 1.5),
         ),
       ),
     );
   }
-
-  Widget _buildTextFieldWithPlus({
-    required TextEditingController controller,
-    required String hint,
-    required VoidCallback onAdd,
-  }) {
-    return Row(
-      children: [
-        Expanded(
-          child: TextFormField(
-            controller: controller,
-            decoration: InputDecoration(
-              hintText: hint,
-              hintStyle: const TextStyle(fontSize: 13, color: Colors.black38),
-              filled: true,
-              fillColor: const Color(0xFFF5F7FA),
-              contentPadding:
-                  const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: const BorderSide(color: Color(0xFFE0E0E0)),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: const BorderSide(color: Color(0xFFE0E0E0)),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide:
-                    const BorderSide(color: Color(0xFF2563EB), width: 1.5),
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(width: 8),
-        InkWell(
-          onTap: onAdd,
-          borderRadius: BorderRadius.circular(8),
-          child: Container(
-            width: 40,
-            height: 46,
-            decoration: BoxDecoration(
-              color: const Color(0xFFE8F0FE),
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: const Color(0xFFBBCFFA)),
-            ),
-            child: const Icon(Icons.add,
-                color: Color(0xFF2563EB), size: 20),
-          ),
-        ),
-      ],
-    );
-  }
 }
 
-// ── Small label widget ───────────────────────────────────────────────────
+// â”€â”€ Small label widget â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class _FieldLabel extends StatelessWidget {
   final String text;
@@ -273,7 +255,7 @@ class _FieldLabel extends StatelessWidget {
       child: Text(
         text,
         style: const TextStyle(
-          fontSize: 13,
+          fontSize: 12,
           fontWeight: FontWeight.w500,
           color: Colors.black54,
         ),

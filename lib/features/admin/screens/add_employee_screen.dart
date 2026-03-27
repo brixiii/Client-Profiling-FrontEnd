@@ -1,5 +1,7 @@
 ﻿import 'package:flutter/material.dart';
 import '../../../shared/widgets/custom_app_bar.dart';
+import '../../../shared/api/backend_api.dart';
+import '../../../shared/api/api_exception.dart';
 
 class AddEmployeeScreen extends StatefulWidget {
   const AddEmployeeScreen({Key? key}) : super(key: key);
@@ -14,6 +16,8 @@ class _AddEmployeeScreenState extends State<AddEmployeeScreen> {
   String? _selectedRole;
 
   final List<String> _roles = ['Super Admin', 'Admin', 'Salesperson', 'Technician'];
+  bool _isSaving = false;
+  final _api = BackendApi();
 
   @override
   void dispose() {
@@ -91,7 +95,7 @@ class _AddEmployeeScreenState extends State<AddEmployeeScreen> {
                 width: double.infinity,
                 height: 52,
                 child: ElevatedButton(
-                  onPressed: _submit,
+                  onPressed: _isSaving ? null : _submit,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFFFFC107),
                     foregroundColor: Colors.black87,
@@ -104,7 +108,13 @@ class _AddEmployeeScreenState extends State<AddEmployeeScreen> {
                       fontWeight: FontWeight.w600,
                     ),
                   ),
-                  child: const Text('Register Employee'),
+                  child: _isSaving
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Text('Register Employee'),
                 ),
               ),
             ),
@@ -114,12 +124,31 @@ class _AddEmployeeScreenState extends State<AddEmployeeScreen> {
     );
   }
 
-  void _submit() {
-    if (_formKey.currentState!.validate()) {
+  Future<void> _submit() async {
+    if (!_formKey.currentState!.validate()) return;
+    setState(() => _isSaving = true);
+    try {
+      await _api.createUser({
+        'name': _fullNameController.text.trim(),
+        'role': _selectedRole,
+      });
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Employee registered successfully')),
       );
-      Navigator.pop(context);
+      Navigator.pop(context, true);
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.message)),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Failed to register employee. Please try again.')),
+      );
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
     }
   }
 

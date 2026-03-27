@@ -132,7 +132,7 @@ class _SparePartsScreenState extends State<SparePartsScreen> {
                   },
                   icon: const Icon(Icons.add, size: 18, color: Colors.white),
                   label: const Text(
-                    '+ Add Parts',
+                    'Add Parts',
                     style: TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.w600,

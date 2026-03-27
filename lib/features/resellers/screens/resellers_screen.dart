@@ -1,4 +1,7 @@
 ﻿import 'package:flutter/material.dart';
+import '../../../shared/api/backend_api.dart';
+import '../../../shared/api/paginated_response.dart';
+import '../../../shared/models/reseller.dart';
 import '../../../shared/widgets/analytics_card.dart';
 import '../../../shared/widgets/animated_fade_slide.dart';
 import '../../../shared/widgets/app_drawer.dart';
@@ -19,38 +22,56 @@ class _ResellersScreenState extends State<ResellersScreen> {
   int _currentPage = 1;
   String _searchQuery = '';
 
-  final List<Map<String, String>> resellers = [
-    {
-      'companyName': 'TechFlow Solutions',
-      'email': 'contact@techflow.com',
-      'phoneNumber': '+1 (555) 123-4567',
-    },
-  ];
+  final BackendApi _api = BackendApi();
+  List<Reseller> _resellers = [];
+  int _totalCount = 0;
+  int _lastPage = 1;
+  int _analyticsResellers = 0;
+  int _analyticsProducts = 0;
+  bool _isLoading = false;
 
-  List<Map<String, String>> get filteredResellers {
-    if (_searchQuery.isEmpty) {
-      return resellers;
+  @override
+  void initState() {
+    super.initState();
+    _fetchResellers();
+    _fetchAnalytics();
+  }
+
+  Future<void> _fetchResellers() async {
+    setState(() => _isLoading = true);
+    try {
+      final response = await _api.getResellers(
+        page: _currentPage,
+        perPage: _entriesPerPage,
+        q: _searchQuery.isEmpty ? null : _searchQuery,
+      );
+      if (!mounted) return;
+      setState(() {
+        _resellers = response.data;
+        _totalCount = response.total;
+        _lastPage = response.lastPage > 0 ? response.lastPage : 1;
+        _isLoading = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _isLoading = false);
     }
-    return resellers.where((reseller) {
-      return reseller['companyName']!.toLowerCase().contains(_searchQuery.toLowerCase()) ||
-          reseller['email']!.toLowerCase().contains(_searchQuery.toLowerCase()) ||
-          reseller['phoneNumber']!.contains(_searchQuery);
-    }).toList();
   }
 
-  List<Map<String, String>> get paginatedResellers {
-    final startIndex = (_currentPage - 1) * _entriesPerPage;
-    final endIndex = startIndex + _entriesPerPage;
-    final filtered = filteredResellers;
-    if (startIndex >= filtered.length) return [];
-    return filtered.sublist(
-      startIndex,
-      endIndex > filtered.length ? filtered.length : endIndex,
-    );
-  }
-
-  int get totalPages {
-    return (filteredResellers.length / _entriesPerPage).ceil();
+  Future<void> _fetchAnalytics() async {
+    try {
+      final both = await Future.wait<dynamic>([
+        _api.getResellers(page: 1, perPage: 1),
+        _api.getResellerProducts(page: 1, perPage: 1),
+      ]);
+      if (!mounted) return;
+      final r0 = both[0] as PaginatedResponse<Reseller>;
+      final r1 = both[1] as PaginatedResponse<Map<String, dynamic>>;
+      setState(() {
+        _analyticsResellers = r0.total;
+        _analyticsProducts  = r1.total;
+      });
+    } catch (_) {}
   }
 
   @override
@@ -87,16 +108,16 @@ class _ResellersScreenState extends State<ResellersScreen> {
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
                   childAspectRatio: 1.5,
-                  children: const [
+                  children: [
                     AnalyticsCard(
                       title: 'Overall Resellers',
-                      value: '1',
-                      backgroundColor: Color(0xFFB3E5FC),
+                      value: '$_analyticsResellers',
+                      backgroundColor: const Color(0xFFB3E5FC),
                     ),
                     AnalyticsCard(
                       title: 'Sold Products',
-                      value: '3527',
-                      backgroundColor: Color(0xFFB3E5FC),
+                      value: '$_analyticsProducts',
+                      backgroundColor: const Color(0xFFB3E5FC),
                     ),
                   ],
                 );
@@ -140,13 +161,18 @@ class _ResellersScreenState extends State<ResellersScreen> {
                         ],
                       ),
                       ElevatedButton.icon(
-                        onPressed: () {
-                          Navigator.push(
+                        onPressed: () async {
+                          final result = await Navigator.push<bool>(
                             context,
                             MaterialPageRoute(
                               builder: (context) => const AddResellerScreen(),
                             ),
                           );
+                          if (result == true && mounted) {
+                            _currentPage = 1;
+                            _fetchResellers();
+                            _fetchAnalytics();
+                          }
                         },
                         icon: const Icon(Icons.add, size: 18),
                         label: const Text('Add Reseller'),
@@ -197,6 +223,7 @@ class _ResellersScreenState extends State<ResellersScreen> {
                                   _entriesPerPage = value!;
                                   _currentPage = 1;
                                 });
+                                _fetchResellers();
                               },
                             ),
                           ),
@@ -222,6 +249,7 @@ class _ResellersScreenState extends State<ResellersScreen> {
                                 _searchQuery = value;
                                 _currentPage = 1;
                               });
+                              _fetchResellers();
                             },
                             decoration: InputDecoration(
                               hintText: 'Search:',
@@ -318,7 +346,12 @@ class _ResellersScreenState extends State<ResellersScreen> {
                   ),
 
                   // Table Rows
-                  if (paginatedResellers.isEmpty)
+                  if (_isLoading)
+                    const Padding(
+                      padding: EdgeInsets.all(32),
+                      child: Center(child: CircularProgressIndicator()),
+                    )
+                  else if (_resellers.isEmpty)
                     Container(
                       padding: const EdgeInsets.all(24),
                       child: Center(
@@ -332,7 +365,7 @@ class _ResellersScreenState extends State<ResellersScreen> {
                       ),
                     )
                   else
-                    ...paginatedResellers.map((reseller) {
+                    ..._resellers.map((reseller) {
                       return Container(
                         padding: const EdgeInsets.symmetric(
                           horizontal: 12,
@@ -348,7 +381,7 @@ class _ResellersScreenState extends State<ResellersScreen> {
                             Expanded(
                               flex: 2,
                               child: Text(
-                                reseller['companyName']!,
+                                reseller.companyName,
                                 style: const TextStyle(
                                   fontSize: 13,
                                   color: Colors.black87,
@@ -358,7 +391,7 @@ class _ResellersScreenState extends State<ResellersScreen> {
                             Expanded(
                               flex: 2,
                               child: Text(
-                                reseller['email']!,
+                                reseller.email,
                                 style: const TextStyle(
                                   fontSize: 13,
                                   color: Colors.black87,
@@ -369,7 +402,7 @@ class _ResellersScreenState extends State<ResellersScreen> {
                             Expanded(
                               flex: 2,
                               child: Text(
-                                reseller['phoneNumber']!,
+                                reseller.phone,
                                 style: const TextStyle(
                                   fontSize: 13,
                                   color: Colors.black87,
@@ -380,8 +413,8 @@ class _ResellersScreenState extends State<ResellersScreen> {
                               width: 80,
                               child: Center(
                                 child: OutlinedButton(
-                                onPressed: () {
-                                  Navigator.push(
+                                onPressed: () async {
+                                  final result = await Navigator.push<bool>(
                                     context,
                                     MaterialPageRoute(
                                       builder: (context) => ResellerDetailScreen(
@@ -389,6 +422,10 @@ class _ResellersScreenState extends State<ResellersScreen> {
                                       ),
                                     ),
                                   );
+                                  if (result == true && mounted) {
+                                    _fetchResellers();
+                                    _fetchAnalytics();
+                                  }
                                 },
                                 style: OutlinedButton.styleFrom(
                                   padding: const EdgeInsets.symmetric(
@@ -435,7 +472,7 @@ class _ResellersScreenState extends State<ResellersScreen> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
-                        'Showing ${filteredResellers.isEmpty ? 0 : ((_currentPage - 1) * _entriesPerPage) + 1} to ${((_currentPage - 1) * _entriesPerPage) + paginatedResellers.length} of ${filteredResellers.length} ${filteredResellers.length == 1 ? 'entry' : 'entries'}',
+                        'Showing ${_resellers.isEmpty ? 0 : ((_currentPage - 1) * _entriesPerPage) + 1} to ${((_currentPage - 1) * _entriesPerPage) + _resellers.length} of $_totalCount ${_totalCount == 1 ? 'entry' : 'entries'}',
                         style: TextStyle(
                           fontSize: 12,
                           color: Colors.grey[600],
@@ -449,6 +486,7 @@ class _ResellersScreenState extends State<ResellersScreen> {
                                     setState(() {
                                       _currentPage = 1;
                                     });
+                                    _fetchResellers();
                                   }
                                 : null,
                             icon: const Icon(Icons.first_page),
@@ -463,6 +501,7 @@ class _ResellersScreenState extends State<ResellersScreen> {
                                     setState(() {
                                       _currentPage--;
                                     });
+                                    _fetchResellers();
                                   }
                                 : null,
                             icon: const Icon(Icons.chevron_left),
@@ -491,11 +530,12 @@ class _ResellersScreenState extends State<ResellersScreen> {
                           ),
                           const SizedBox(width: 8),
                           IconButton(
-                            onPressed: _currentPage < totalPages
+                            onPressed: _currentPage < _lastPage
                                 ? () {
                                     setState(() {
                                       _currentPage++;
                                     });
+                                    _fetchResellers();
                                   }
                                 : null,
                             icon: const Icon(Icons.chevron_right),

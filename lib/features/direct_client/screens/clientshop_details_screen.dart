@@ -1,20 +1,31 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../../shared/api/api_exception.dart';
+import '../../../shared/models/shop.dart';
 import '../../../shared/widgets/custom_app_bar.dart';
+import '../providers/client_shops_provider.dart';
 import 'clientproduct_detail_screen.dart';
 import 'edit_owner_screen.dart';
 import 'screens/add_client/add_buttons_screen.dart';
 
-class ClientDetailsScreen extends StatefulWidget {
+class ClientShopDetailsScreen extends ConsumerStatefulWidget {
   final Map<String, String> client;
 
-  const ClientDetailsScreen({Key? key, required this.client}) : super(key: key);
+  const ClientShopDetailsScreen({Key? key, required this.client})
+      : super(key: key);
 
   @override
-  State<ClientDetailsScreen> createState() => _ClientDetailsScreenState();
+  ConsumerState<ClientShopDetailsScreen> createState() =>
+      _ClientShopDetailsScreenState();
 }
 
-class _ClientDetailsScreenState extends State<ClientDetailsScreen> {
+class _ClientShopDetailsScreenState
+    extends ConsumerState<ClientShopDetailsScreen> {
   final TextEditingController _searchController = TextEditingController();
+
+  int? get _clientId =>
+      int.tryParse(widget.client['client_id'] ?? widget.client['id'] ?? '');
 
   @override
   void dispose() {
@@ -25,12 +36,19 @@ class _ClientDetailsScreenState extends State<ClientDetailsScreen> {
   @override
   Widget build(BuildContext context) {
     final client = widget.client;
-    final List<Map<String, String>> shops = [
-      {
-        'shop': client['shop'] ?? '-',
-        'contactPerson': client['contactPerson'] ?? '-',
-      },
-    ];
+    final shopsAsync = ref.watch(clientShopsProvider(_clientId));
+    final _isShopsLoading = shopsAsync.isLoading;
+    final _shopsError = shopsAsync.hasError
+        ? (shopsAsync.error is ApiException
+            ? (shopsAsync.error as ApiException).message
+            : 'Failed to load shops.')
+        : null;
+    final query = _searchController.text.trim().toLowerCase();
+    final shops = (shopsAsync.valueOrNull ?? <Shop>[]).where((shop) {
+      if (query.isEmpty) return true;
+      return shop.shopname.toLowerCase().contains(query) ||
+          shop.scontactperson.toLowerCase().contains(query);
+    }).toList();
 
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7FA),
@@ -40,7 +58,6 @@ class _ClientDetailsScreenState extends State<ClientDetailsScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // ── Client Details ────────────────────────────────────────
             const Text(
               'Client Details',
               style: TextStyle(
@@ -61,7 +78,12 @@ class _ClientDetailsScreenState extends State<ClientDetailsScreen> {
                 children: [
                   _infoRow('Name:', client['contactPerson'] ?? '-'),
                   _divider(),
-                  _infoRow('Company Name:', client['companyName'] ?? 'N/A'),
+                  _infoRow(
+                    'Company Name:',
+                    client['ccompanyname']?.trim().isNotEmpty == true
+                        ? client['ccompanyname']!
+                        : (client['companyName'] ?? '-'),
+                  ),
                   _divider(),
                   _infoRow('Email:', client['contactEmail'] ?? '-'),
                   _divider(),
@@ -79,7 +101,8 @@ class _ClientDetailsScreenState extends State<ClientDetailsScreen> {
                               ),
                             );
                           },
-                          icon: const Icon(Icons.edit, color: Colors.white, size: 18),
+                          icon: const Icon(Icons.edit,
+                              color: Colors.white, size: 18),
                           label: const Text(
                             'Edit',
                             style: TextStyle(
@@ -128,11 +151,11 @@ class _ClientDetailsScreenState extends State<ClientDetailsScreen> {
                               ),
                             );
                             if (confirmed == true) {
-                              // TODO: delete logic
                               Navigator.pop(context);
                             }
                           },
-                          icon: const Icon(Icons.delete, color: Colors.white, size: 18),
+                          icon: const Icon(Icons.delete,
+                              color: Colors.white, size: 18),
                           label: const Text(
                             'Delete',
                             style: TextStyle(
@@ -157,8 +180,6 @@ class _ClientDetailsScreenState extends State<ClientDetailsScreen> {
               ),
             ),
             const SizedBox(height: 24),
-
-            // ── Shop Details ──────────────────────────────────────────
             const Text(
               'Shop Details',
               style: TextStyle(
@@ -175,7 +196,6 @@ class _ClientDetailsScreenState extends State<ClientDetailsScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Search + Add Shop row
                   Padding(
                     padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
                     child: Row(
@@ -226,13 +246,18 @@ class _ClientDetailsScreenState extends State<ClientDetailsScreen> {
                         ),
                         const SizedBox(width: 10),
                         ElevatedButton.icon(
-                          onPressed: () {
-                            Navigator.push(
+                          onPressed: () async {
+                            await Navigator.push(
                               context,
                               MaterialPageRoute(
-                                builder: (_) => const AddButtonsScreen(mode: AddMode.shop),
+                                builder: (_) => AddButtonsScreen(
+                                  mode: AddMode.shop,
+                                  initialClientId: _clientId,
+                                ),
                               ),
                             );
+                            // Invalidate so the provider re-fetches fresh shops.
+                            ref.invalidate(clientShopsProvider(_clientId));
                           },
                           icon: const Icon(Icons.add, size: 16),
                           label: const Text('Add Shop'),
@@ -250,8 +275,6 @@ class _ClientDetailsScreenState extends State<ClientDetailsScreen> {
                     ),
                   ),
                   const SizedBox(height: 16),
-
-                  // Table header
                   Container(
                     decoration: BoxDecoration(
                       border: Border(
@@ -298,20 +321,31 @@ class _ClientDetailsScreenState extends State<ClientDetailsScreen> {
                       ],
                     ),
                   ),
-
-                  // Data rows
                   if (shops.isEmpty)
                     Padding(
                       padding: const EdgeInsets.symmetric(vertical: 28),
                       child: Center(
                         child: Column(
                           children: [
-                            Icon(Icons.store_outlined,
-                                size: 44, color: Colors.grey[300]),
+                            if (_isShopsLoading)
+                              const SizedBox(
+                                height: 20,
+                                width: 20,
+                                child:
+                                    CircularProgressIndicator(strokeWidth: 2),
+                              )
+                            else
+                              Icon(Icons.store_outlined,
+                                  size: 44, color: Colors.grey[300]),
                             const SizedBox(height: 8),
-                            Text('No shops yet',
-                                style: TextStyle(
-                                    fontSize: 13, color: Colors.grey[400])),
+                            Text(
+                              _shopsError ?? 'No shops yet',
+                              style: TextStyle(
+                                  fontSize: 13,
+                                  color: _shopsError == null
+                                      ? Colors.grey[400]
+                                      : const Color(0xFFB91C1C)),
+                            ),
                           ],
                         ),
                       ),
@@ -320,8 +354,8 @@ class _ClientDetailsScreenState extends State<ClientDetailsScreen> {
                     ...shops.map((shop) => Container(
                           decoration: BoxDecoration(
                             border: Border(
-                              bottom:
-                                  BorderSide(color: Colors.grey[200]!, width: 1),
+                              bottom: BorderSide(
+                                  color: Colors.grey[200]!, width: 1),
                             ),
                           ),
                           child: Row(
@@ -330,7 +364,7 @@ class _ClientDetailsScreenState extends State<ClientDetailsScreen> {
                                 child: Padding(
                                   padding: const EdgeInsets.symmetric(
                                       vertical: 16, horizontal: 12),
-                                  child: Text(shop['shop']!,
+                                  child: Text(shop.shopname,
                                       style: const TextStyle(fontSize: 14)),
                                 ),
                               ),
@@ -338,7 +372,10 @@ class _ClientDetailsScreenState extends State<ClientDetailsScreen> {
                                 child: Padding(
                                   padding: const EdgeInsets.symmetric(
                                       vertical: 16, horizontal: 12),
-                                  child: Text(shop['contactPerson']!,
+                                  child: Text(
+                                      shop.scontactperson.isEmpty
+                                          ? '-'
+                                          : shop.scontactperson,
                                       style: const TextStyle(fontSize: 14)),
                                 ),
                               ),
@@ -347,11 +384,24 @@ class _ClientDetailsScreenState extends State<ClientDetailsScreen> {
                                 child: Center(
                                   child: OutlinedButton(
                                     onPressed: () {
+                                      final scopedClient = {
+                                        ...client,
+                                        'shop_id': shop.id.toString(),
+                                        'shop': shop.shopname,
+                                        'address': shop.saddress,
+                                        'pinLocation': shop.pinLocation,
+                                        'googleMaps': shop.locationLink,
+                                        'branchType': shop.shopTypeId,
+                                        'contactPerson': shop.scontactperson,
+                                        'contactEmail': shop.semailaddress,
+                                        'contactNo': shop.scontactnum,
+                                        'viberNo': shop.svibernum,
+                                      };
                                       Navigator.push(
                                         context,
                                         MaterialPageRoute(
                                           builder: (_) => ClientDetailScreen(
-                                              client: widget.client),
+                                              client: scopedClient),
                                         ),
                                       );
                                     },
@@ -370,8 +420,7 @@ class _ClientDetailsScreenState extends State<ClientDetailsScreen> {
                                       mainAxisSize: MainAxisSize.min,
                                       children: const [
                                         Icon(Icons.visibility_outlined,
-                                            size: 13,
-                                            color: Color(0xFF2563EB)),
+                                            size: 13, color: Color(0xFF2563EB)),
                                         SizedBox(width: 3),
                                         Text('View',
                                             style: TextStyle(
@@ -386,8 +435,6 @@ class _ClientDetailsScreenState extends State<ClientDetailsScreen> {
                             ],
                           ),
                         )),
-
-                  // Pagination footer
                   const SizedBox(height: 4),
                   Padding(
                     padding: const EdgeInsets.symmetric(
@@ -397,8 +444,8 @@ class _ClientDetailsScreenState extends State<ClientDetailsScreen> {
                       children: [
                         Text(
                           'Showing 1 to ${shops.length} of ${shops.length} entries',
-                          style: const TextStyle(
-                              fontSize: 12, color: Colors.grey),
+                          style:
+                              const TextStyle(fontSize: 12, color: Colors.grey),
                         ),
                         Row(
                           children: [
@@ -470,9 +517,11 @@ class _PaginationButton extends StatelessWidget {
   final IconData icon;
   final VoidCallback onPressed;
 
-  const _PaginationButton(
-      {Key? key, required this.icon, required this.onPressed})
-      : super(key: key);
+  const _PaginationButton({
+    Key? key,
+    required this.icon,
+    required this.onPressed,
+  }) : super(key: key);
 
   @override
   Widget build(BuildContext context) {

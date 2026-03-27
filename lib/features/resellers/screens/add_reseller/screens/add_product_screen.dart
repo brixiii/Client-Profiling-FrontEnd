@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
+import '../../../../../shared/api/backend_api.dart';
+import '../../../../../shared/api/paginated_response.dart';
+import '../../../../../shared/models/product.dart';
+import '../../../../../shared/models/reseller.dart';
 import '../../../../../shared/widgets/custom_app_bar.dart';
 
 class AddProductScreen extends StatefulWidget {
-  final Map<String, String> reseller;
+  final Reseller reseller;
 
   const AddProductScreen({Key? key, required this.reseller}) : super(key: key);
 
@@ -14,41 +18,44 @@ class _AddProductScreenState extends State<AddProductScreen> {
   int _currentStep = 0;
   static const int _totalSteps = 4;
 
-  // Step 1 — Product Selection
+  Map<String, String> _fieldErrors = {};
+
+  // Step 0 — Product Selection
   String? _modelName;
   String? _supplierType;
   String? _machineType;
-  String? _modelCode;
+  final _modelCodeController = TextEditingController();
   String? _unit;
 
-  // Step 2 — Order Details
-  int _quantity = 1;
+  // Step 1 — Order Details
+  final _quantityController = TextEditingController(text: '1');
   final _poController = TextEditingController();
   final _drController = TextEditingController();
   final List<TextEditingController> _serialControllers = [
     TextEditingController()
   ];
 
-  // Step 3 — Delivery Info
+  // Step 2 — Delivery Info
   final _deliveryAddressController = TextEditingController();
   DateTime? _deliveryDate;
   String? _logistic;
   final _customerRepController = TextEditingController();
 
-  // Step 4 — Notes
+  // Step 3 — Notes
   final _notesController = TextEditingController();
 
-  static const _modelNames = [
-    'Model A', 'Model B', 'Model C', 'Model D', 'Model E'
-  ];
-  static const _supplierTypes = ['Offer', 'Standard', 'Direct'];
-  static const _machineTypes = ['Desktop', 'Laptop', 'Printer', 'Server', 'Other'];
-  static const _modelCodes = [
-    'CWC027MOCR8', 'CWC028MOCR8', 'CWC029MOCR8', 'Other'
-  ];
-  static const _unitTypes = ['UCM', 'Itemized', 'Bundle'];
+  final BackendApi _api = BackendApi();
+
+  // ── API-driven option lists ──────────────────────────────────────────────
+  List<Map<String, dynamic>> _applianceModelRows = [];
+  final List<String> _modelNames = [];
+  final List<String> _machineTypes = [];
+  final List<String> _uomOptions = [];
+  bool _isLoadingDependencies = false;
+
+  static const _supplierTypes = ['Bulla Crave', 'Other'];
   static const _logistics = [
-    'Pick-up', 'Door-to-Door', 'Freight', 'Courier', 'Air Cargo'
+    'Pick-up', 'Door-to-Door', 'Freight', 'Courier', 'Air Cargo',
   ];
 
   static const _stepTitles = [
@@ -57,15 +64,17 @@ class _AddProductScreenState extends State<AddProductScreen> {
     'Delivery Info',
     'Notes',
   ];
-  static const _stepSubtitles = [
-    'Select model and product details',
-    'Enter quantity and order numbers',
-    'Enter delivery details',
-    'Add any additional notes',
-  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadDependencies();
+  }
 
   @override
   void dispose() {
+    _modelCodeController.dispose();
+    _quantityController.dispose();
     _poController.dispose();
     _drController.dispose();
     for (final c in _serialControllers) {
@@ -77,22 +86,193 @@ class _AddProductScreenState extends State<AddProductScreen> {
     super.dispose();
   }
 
+  Future<void> _loadDependencies() async {
+    setState(() => _isLoadingDependencies = true);
+
+    try {
+      final results = await Future.wait([
+        _api.getApplianceModels(page: 1, perPage: 100).catchError((_) =>
+            PaginatedResponse<Map<String, dynamic>>(
+                data: const [],
+                currentPage: 1,
+                perPage: 100,
+                total: 0,
+                lastPage: 1,
+                links: const [])),
+        _api.getProducts(page: 1, perPage: 200).catchError((_) =>
+            PaginatedResponse<Product>(
+                data: const [],
+                currentPage: 1,
+                perPage: 200,
+                total: 0,
+                lastPage: 1,
+                links: const [])),
+      ]);
+
+      if (!mounted) return;
+
+      final applianceModels =
+          (results[0] as PaginatedResponse<Map<String, dynamic>>).data;
+      final products = (results[1] as PaginatedResponse<Product>).data;
+
+      List<String> collectUnique(Iterable<String> values) {
+        final byKey = <String, String>{};
+        for (final raw in values) {
+          final value = raw.trim();
+          if (value.isEmpty) continue;
+          byKey.putIfAbsent(value.toLowerCase(), () => value);
+        }
+        return byKey.values.toList()..sort();
+      }
+
+      final derivedModelNames = collectUnique(
+          applianceModels.map((row) => _asString(row['model_name'])));
+      final derivedUom =
+          _sanitizeUomOptions(products.map((Product p) => p.unitsofmeasurement));
+
+      setState(() {
+        _applianceModelRows =
+            applianceModels.map((row) => Map<String, dynamic>.from(row)).toList();
+        _modelNames
+          ..clear()
+          ..addAll(derivedModelNames);
+        _uomOptions
+          ..clear()
+          ..addAll(derivedUom);
+        _isLoadingDependencies = false;
+      });
+    } catch (_) {
+      if (mounted) setState(() => _isLoadingDependencies = false);
+    }
+  }
+
+  // ── Appliance model dependency chain ──────────────────────────────────
+
+  static const Map<String, _ApplianceTypeMeta> _applianceTypeMeta = {
+    'washer': _ApplianceTypeMeta('Washer', 'washer_code'),
+    'dryer': _ApplianceTypeMeta('Dryer', 'dryer_code'),
+    'styler': _ApplianceTypeMeta('Styler', 'styler_code'),
+    'payment_system':
+        _ApplianceTypeMeta('Payment System', 'payment_system_code'),
+  };
+
+  void _onModelNameChanged(String? value) {
+    setState(() {
+      _modelName = value;
+      _machineTypes
+        ..clear()
+        ..addAll(_machineTypesForModel(_modelName));
+      if (!_machineTypes.contains(_machineType)) {
+        _machineType = null;
+      }
+      _modelCodeController.text =
+          _resolveModelCode(modelName: _modelName, applianceType: _machineType) ?? '';
+    });
+  }
+
+  void _onMachineTypeChanged(String? value) {
+    setState(() {
+      _machineType = value;
+      _modelCodeController.text =
+          _resolveModelCode(modelName: _modelName, applianceType: _machineType) ?? '';
+    });
+  }
+
+  List<String> _machineTypesForModel(String? modelName) {
+    final model = (modelName ?? '').trim();
+    if (model.isEmpty) return const [];
+    final ordered = <String>[];
+    for (final row in _applianceModelRows) {
+      if (_asString(row['model_name']) != model) continue;
+      for (final entry in _applianceTypeMeta.entries) {
+        if (_asBool(row[entry.key])) {
+          final label = entry.value.label;
+          if (!ordered.contains(label)) ordered.add(label);
+        }
+      }
+    }
+    return ordered;
+  }
+
+  String? _resolveModelCode({
+    required String? modelName,
+    required String? applianceType,
+  }) {
+    final model = (modelName ?? '').trim();
+    final typeLabel = (applianceType ?? '').trim();
+    if (model.isEmpty || typeLabel.isEmpty) return null;
+
+    String? key;
+    for (final entry in _applianceTypeMeta.entries) {
+      if (entry.value.label == typeLabel) {
+        key = entry.key;
+        break;
+      }
+    }
+    if (key == null) return null;
+
+    final meta = _applianceTypeMeta[key]!;
+    for (final row in _applianceModelRows) {
+      if (_asString(row['model_name']) != model) continue;
+      if (!_asBool(row[key])) continue;
+      final code = _asString(row[meta.codeField]);
+      if (code.isNotEmpty) return code;
+    }
+    return null;
+  }
+
+  String _asString(dynamic raw) => (raw ?? '').toString().trim();
+
+  bool _asBool(dynamic raw) {
+    if (raw is bool) return raw;
+    final value = (raw ?? '').toString().trim().toLowerCase();
+    return value == '1' || value == 'true' || value == 'yes';
+  }
+
+  List<String> _sanitizeUomOptions(Iterable<String> values) {
+    const invalidValues = {'', '-', 'null', 'password', 'n/a', 'na', 'none'};
+    final byKey = <String, String>{};
+    for (final raw in values) {
+      final cleaned = raw.trim();
+      if (cleaned.isEmpty) continue;
+      final normalized = cleaned.toLowerCase();
+      if (invalidValues.contains(normalized)) continue;
+      byKey.putIfAbsent(normalized, () => cleaned);
+    }
+    return byKey.values.toList()..sort();
+  }
+
+  bool _validateCurrentStep() {
+    final errors = <String, String>{};
+    if (_currentStep == 0) {
+      if ((_modelName ?? '').trim().isEmpty) {
+        errors['model_name'] = 'Model name is required.';
+      }
+      if ((_machineType ?? '').trim().isEmpty) {
+        errors['appliance_type'] = 'Machine type is required.';
+      }
+      if (_modelCodeController.text.trim().isEmpty) {
+        errors['model_code'] = 'Model code is required.';
+      }
+      if ((_unit ?? '').trim().isEmpty) {
+        errors['unitsofmeasurement'] = 'UOM is required.';
+      }
+    }
+    if (errors.isEmpty) {
+      if (_fieldErrors.isNotEmpty) setState(() => _fieldErrors = {});
+      return true;
+    }
+    setState(() => _fieldErrors = errors);
+    return false;
+  }
+
   void _nextStep() {
+    if (!_validateCurrentStep()) return;
     if (_currentStep < _totalSteps - 1) {
       setState(() => _currentStep++);
     } else {
       _showConfirmDialog();
     }
-  }
-
-  Future<void> _pickDate() async {
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: _deliveryDate ?? DateTime.now(),
-      firstDate: DateTime.now(),
-      lastDate: DateTime.now().add(const Duration(days: 365 * 2)),
-    );
-    if (picked != null) setState(() => _deliveryDate = picked);
   }
 
   void _showConfirmDialog() {
@@ -136,41 +316,39 @@ class _AddProductScreenState extends State<AddProductScreen> {
                     color: Colors.black87),
               ),
               const SizedBox(height: 16),
-              _summaryRow('Reseller', widget.reseller['companyName'] ?? ''),
-              _summaryRow('Model Name', _modelName ?? 'N/A'),
-              _summaryRow('Supplier Type', _supplierType ?? 'N/A'),
-              _summaryRow('Machine Type', _machineType ?? 'N/A'),
-              _summaryRow('Model Code', _modelCode ?? 'N/A'),
-              _summaryRow('Unit', _unit ?? 'N/A'),
-              _summaryRow('Quantity', '$_quantity'),
-              _summaryRow('Purchase Order', _poController.text.isEmpty ? 'N/A' : _poController.text),
-              _summaryRow('Delivery Receipt', _drController.text.isEmpty ? 'N/A' : _drController.text),
-              _summaryRow('Serial/Unit Numbers', serials.isEmpty ? 'N/A' : serials),
+              _summaryRow('Reseller', widget.reseller.companyName),
+              _summaryRow('Model Name', _modelName ?? '-'),
+              _summaryRow('Supplier Type', _supplierType ?? '-'),
+              _summaryRow('Machine Type', _machineType ?? '-'),
+              _summaryRow('Model Code',
+                  _modelCodeController.text.isEmpty ? '-' : _modelCodeController.text),
+              _summaryRow('UOM', _unit ?? '-'),
+              _summaryRow('Quantity', _quantityController.text),
+              _summaryRow('Purchase Order',
+                  _poController.text.isEmpty ? '-' : _poController.text),
+              _summaryRow('Delivery Receipt',
+                  _drController.text.isEmpty ? '-' : _drController.text),
+              _summaryRow('Serial/Unit Numbers', serials.isEmpty ? '-' : serials),
               _summaryRow('Delivery Address',
-                  _deliveryAddressController.text.isEmpty ? 'N/A' : _deliveryAddressController.text),
+                  _deliveryAddressController.text.isEmpty ? '-' : _deliveryAddressController.text),
               _summaryRow(
                 'Delivery Date',
                 _deliveryDate == null
-                    ? 'N/A'
+                    ? '-'
                     : '${_deliveryDate!.month}/${_deliveryDate!.day}/${_deliveryDate!.year}',
               ),
-              _summaryRow('Logistic', _logistic ?? 'N/A'),
+              _summaryRow('Logistic', _logistic ?? '-'),
               _summaryRow('Customer Representative',
-                  _customerRepController.text.isEmpty ? 'N/A' : _customerRepController.text),
-              _summaryRow('Notes', _notesController.text.isEmpty ? 'N/A' : _notesController.text),
+                  _customerRepController.text.isEmpty ? '-' : _customerRepController.text),
+              _summaryRow('Notes',
+                  _notesController.text.isEmpty ? '-' : _notesController.text),
               const SizedBox(height: 24),
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
                   onPressed: () {
-                    Navigator.pop(context);
-                    Navigator.pop(context);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Product added successfully'),
-                        backgroundColor: Color(0xFF2563EB),
-                      ),
-                    );
+                    Navigator.pop(context); // close sheet
+                    _submitProduct();
                   },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFFFFC300),
@@ -194,7 +372,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
 
   Widget _summaryRow(String label, String value) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.only(bottom: 14),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -210,329 +388,410 @@ class _AddProductScreenState extends State<AddProductScreen> {
     );
   }
 
-  // ── Step content builders ──────────────────────────────────────────────
+  Future<void> _submitProduct() async {
+    try {
+      final product = await _api.createResellerProduct({
+        'model_name': _modelName ?? '',
+        'appliance_type': _machineType ?? '',
+        'model_code': _modelCodeController.text.trim(),
+        'unitsofmeasurement': _unit ?? '',
+        'quantity': int.tryParse(_quantityController.text.trim()) ?? 1,
+        'reseller_id': widget.reseller.id,
+        'po_number': _poController.text.trim().isEmpty
+            ? null : _poController.text.trim(),
+        'dr_number': _drController.text.trim().isEmpty
+            ? null : _drController.text.trim(),
+        'delivery_date': _deliveryDate == null
+            ? null
+            : '${_deliveryDate!.year}-'
+              '${_deliveryDate!.month.toString().padLeft(2, '0')}-'
+              '${_deliveryDate!.day.toString().padLeft(2, '0')}',
+        'delivery_address': _deliveryAddressController.text.trim().isEmpty
+            ? null : _deliveryAddressController.text.trim(),
+        'customer_representative': _customerRepController.text.trim().isEmpty
+            ? null : _customerRepController.text.trim(),
+        'notes': _notesController.text.trim().isEmpty
+            ? null : _notesController.text.trim(),
+      });
+      // Post each serial number separately
+      final validSerials = _serialControllers
+          .map((c) => c.text.trim())
+          .where((s) => s.isNotEmpty)
+          .toList();
+      for (final serial in validSerials) {
+        await _api.createResellerProductSerial(
+          resellerProductId: product.id,
+          serialNumber: serial,
+          supplierType: _supplierType ?? '',
+        );
+      }
+      if (!mounted) return;
+      Navigator.pop(context, true);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Product added successfully'),
+          backgroundColor: Color(0xFF2563EB),
+        ),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Failed to add product.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
 
-  Widget _buildStep1() {
+  // ── Step content ──────────────────────────────────────────────────────
+
+  Widget addProductDetails() {
+    switch (_currentStep) {
+      case 0:
+        return Column(
+          children: [
+            if (_isLoadingDependencies)
+              const Padding(
+                padding: EdgeInsets.only(bottom: 12),
+                child: LinearProgressIndicator(
+                  color: Color(0xFFFFC300),
+                  backgroundColor: Color(0xFFFFF9C4),
+                ),
+              ),
+            _buildDropdown('Select Model Name', _modelName, _modelNames,
+                _onModelNameChanged,
+                errorText: _fieldErrors['model_name']),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                const Text(
+                  'Supplier Type',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                    color: Colors.black87,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Tooltip(
+                  message:
+                      'Select supplier type, Bulla Crave for direct supply / Other for indirect supply (Super Admin Only)',
+                  child: const Icon(
+                    Icons.help,
+                    size: 20,
+                    color: Color(0xFF2563EB),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            _buildDropdown('Select supplier type', _supplierType,
+                _supplierTypes, (v) => setState(() => _supplierType = v)),
+            const SizedBox(height: 12),
+            _buildDropdown('Machine Type', _machineType, _machineTypes,
+                _onMachineTypeChanged,
+                errorText: _fieldErrors['appliance_type']),
+            const SizedBox(height: 12),
+            _buildTextField(_modelCodeController,
+                hint: 'Model Code',
+                readOnly: true,
+                errorText: _fieldErrors['model_code']),
+            const SizedBox(height: 12),
+            _buildDropdown('UOM', _unit, _uomOptions,
+                (v) => setState(() => _unit = v),
+                errorText: _fieldErrors['unitsofmeasurement']),
+          ],
+        );
+      case 1:
+        return Column(
+          children: [
+            _buildSpinnerField('Quantity', _quantityController),
+            const SizedBox(height: 12),
+            _buildTextField(_poController,
+                hint: 'Purchase Order (Optional)'),
+            const SizedBox(height: 12),
+            _buildTextField(_drController,
+                hint: 'Delivery Receipt (Optional)'),
+            const SizedBox(height: 12),
+            ...List.generate(_serialControllers.length, (i) {
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: _buildTextField(_serialControllers[i],
+                          hint: 'Serial/Unit Number'),
+                    ),
+                    if (i == _serialControllers.length - 1) ...[
+                      const SizedBox(width: 8),
+                      _buildIconButton(Icons.add, () {
+                        setState(() {
+                          _serialControllers.add(TextEditingController());
+                        });
+                      }),
+                    ],
+                  ],
+                ),
+              );
+            }),
+          ],
+        );
+      case 2:
+        return Column(
+          children: [
+            _buildTextField(_deliveryAddressController,
+                hint: 'Delivery Address'),
+            const SizedBox(height: 12),
+            _buildDateField('Delivery Date', _deliveryDate,
+                (d) => setState(() => _deliveryDate = d)),
+            const SizedBox(height: 12),
+            _buildDropdown('Logistic', _logistic, _logistics,
+                (v) => setState(() => _logistic = v)),
+            const SizedBox(height: 12),
+            _buildTextField(_customerRepController,
+                hint: 'Customer Representative'),
+          ],
+        );
+      case 3:
+        return _buildTextField(_notesController, hint: 'Notes', maxLines: 7);
+      default:
+        return const SizedBox.shrink();
+    }
+  }
+
+  // ── Shared input helpers (matching add_buttons_screen style) ──────────
+
+  Widget _buildTextField(
+    TextEditingController controller, {
+    String hint = '',
+    int maxLines = 1,
+    String? errorText,
+    bool readOnly = false,
+    TextInputType keyboardType = TextInputType.text,
+  }) {
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildDropdown(
-          value: _modelName,
-          items: _modelNames,
-          hint: 'Select Model Name',
-          icon: Icons.devices_outlined,
-          onChanged: (val) => setState(() => _modelName = val),
+        TextField(
+          controller: controller,
+          maxLines: maxLines,
+          readOnly: readOnly,
+          keyboardType: keyboardType,
+          style: const TextStyle(fontSize: 14, color: Colors.black87),
+          decoration: InputDecoration(
+            hintText: hint,
+            hintStyle: TextStyle(color: Colors.grey[400], fontSize: 14),
+            filled: true,
+            fillColor: Colors.white,
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: BorderSide(
+                color: errorText == null
+                    ? Colors.grey[300]!
+                    : const Color(0xFFB91C1C),
+              ),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: BorderSide(
+                color: errorText == null
+                    ? Colors.grey[300]!
+                    : const Color(0xFFB91C1C),
+              ),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: BorderSide(
+                color: errorText == null
+                    ? const Color(0xFF2563EB)
+                    : const Color(0xFFB91C1C),
+                width: 1.5,
+              ),
+            ),
+          ),
         ),
-        const SizedBox(height: 14),
-        _buildDropdown(
-          value: _supplierType,
-          items: _supplierTypes,
-          hint: 'Supplier Type',
-          icon: Icons.category_outlined,
-          onChanged: (val) => setState(() => _supplierType = val),
-        ),
-        const SizedBox(height: 14),
-        _buildDropdown(
-          value: _machineType,
-          items: _machineTypes,
-          hint: 'Machine Type',
-          icon: Icons.computer_outlined,
-          onChanged: (val) => setState(() => _machineType = val),
-        ),
-        const SizedBox(height: 14),
-        _buildDropdown(
-          value: _modelCode,
-          items: _modelCodes,
-          hint: 'Model Code',
-          icon: Icons.qr_code_outlined,
-          onChanged: (val) => setState(() => _modelCode = val),
-        ),
-        const SizedBox(height: 14),
-        _buildDropdown(
-          value: _unit,
-          items: _unitTypes,
-          hint: 'UCM',
-          icon: Icons.inventory_2_outlined,
-          onChanged: (val) => setState(() => _unit = val),
-        ),
+        if (errorText != null && errorText.trim().isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: 6, left: 2),
+            child: Text(
+              errorText,
+              style:
+                  const TextStyle(fontSize: 12, color: Color(0xFFB91C1C)),
+            ),
+          ),
       ],
     );
   }
 
-  Widget _buildStep2() {
+  Widget _buildDropdown(
+    String hint,
+    String? value,
+    List<String> items,
+    ValueChanged<String?> onChanged, {
+    String? errorText,
+  }) {
+    final safeValue = items.contains(value) ? value : null;
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Quantity stepper
         Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14),
           decoration: BoxDecoration(
-            color: Colors.grey[50],
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: Colors.grey[300]!),
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+                color: errorText == null
+                    ? Colors.grey[300]!
+                    : const Color(0xFFB91C1C)),
           ),
-          child: Row(
-            children: [
-              IconButton(
-                icon: const Icon(Icons.remove),
-                onPressed: () {
-                  if (_quantity > 1) setState(() => _quantity--);
-                },
-                color: Colors.grey[600],
+          child: DropdownButtonHideUnderline(
+            child: DropdownButton<String>(
+              value: safeValue,
+              isExpanded: true,
+              hint: Text(hint,
+                  style: TextStyle(color: Colors.grey[400], fontSize: 14)),
+              items: items
+                  .map((item) => DropdownMenuItem(
+                        value: item,
+                        child: Text(item,
+                            style: const TextStyle(
+                                fontSize: 14, color: Colors.black87)),
+                      ))
+                  .toList(),
+              onChanged: onChanged,
+            ),
+          ),
+        ),
+        if (errorText != null && errorText.trim().isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: 6, left: 2),
+            child: Text(
+              errorText,
+              style:
+                  const TextStyle(fontSize: 12, color: Color(0xFFB91C1C)),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildSpinnerField(String label, TextEditingController controller) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.grey[300]!),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: TextField(
+              controller: controller,
+              keyboardType: TextInputType.number,
+              style: const TextStyle(fontSize: 14),
+              decoration: InputDecoration(
+                hintText: label,
+                hintStyle:
+                    TextStyle(color: Colors.grey[400], fontSize: 14),
+                border: InputBorder.none,
+                contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 14, vertical: 12),
               ),
-              Expanded(
-                child: Text(
-                  '$_quantity',
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                      fontSize: 16, fontWeight: FontWeight.w600),
+            ),
+          ),
+          Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              InkWell(
+                onTap: () {
+                  final val = int.tryParse(controller.text) ?? 0;
+                  controller.text = '${val + 1}';
+                },
+                child: const Padding(
+                  padding:
+                      EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                  child: Icon(Icons.keyboard_arrow_up, size: 18),
                 ),
               ),
-              IconButton(
-                icon: const Icon(Icons.add),
-                onPressed: () => setState(() => _quantity++),
-                color: Colors.grey[600],
+              InkWell(
+                onTap: () {
+                  final val = int.tryParse(controller.text) ?? 2;
+                  if (val > 1) controller.text = '${val - 1}';
+                },
+                child: const Padding(
+                  padding:
+                      EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                  child: Icon(Icons.keyboard_arrow_down, size: 18),
+                ),
               ),
             ],
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDateField(
+    String hint,
+    DateTime? value,
+    ValueChanged<DateTime> onPicked,
+  ) {
+    final display =
+        value != null ? '${value.month}/${value.day}/${value.year}' : '';
+    return InkWell(
+      onTap: () async {
+        final picked = await showDatePicker(
+          context: context,
+          initialDate: value ?? DateTime.now(),
+          firstDate: DateTime(2020),
+          lastDate: DateTime(2030),
+        );
+        if (picked != null) onPicked(picked);
+      },
+      child: Container(
+        padding:
+            const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: Colors.grey[300]!),
         ),
-        const SizedBox(height: 14),
-        _buildTextField(
-          controller: _poController,
-          hint: 'Purchase Order',
-          icon: Icons.receipt_long_outlined,
-        ),
-        const SizedBox(height: 14),
-        _buildTextField(
-          controller: _drController,
-          hint: 'Delivery Receipt',
-          icon: Icons.assignment_outlined,
-        ),
-        const SizedBox(height: 14),
-        // Serial/Unit Number list with + button
-        ...List.generate(_serialControllers.length, (i) {
-          return Padding(
-            padding: const EdgeInsets.only(bottom: 8),
-            child: Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _serialControllers[i],
-                    decoration: InputDecoration(
-                      hintText: 'Serial/Unit Number',
-                      hintStyle:
-                          TextStyle(color: Colors.grey[400], fontSize: 13),
-                      filled: true,
-                      fillColor: Colors.grey[50],
-                      contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 14, vertical: 13),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
-                        borderSide: BorderSide(color: Colors.grey[300]!),
-                      ),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
-                        borderSide: BorderSide(color: Colors.grey[300]!),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
-                        borderSide: const BorderSide(
-                            color: Color(0xFF2563EB), width: 1.5),
-                      ),
-                    ),
-                  ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                display.isEmpty ? hint : display,
+                style: TextStyle(
+                  fontSize: 14,
+                  color:
+                      display.isEmpty ? Colors.grey[400] : Colors.black87,
                 ),
-                if (i == _serialControllers.length - 1) ...[
-                  const SizedBox(width: 8),
-                  GestureDetector(
-                    onTap: () {
-                      setState(() {
-                        _serialControllers.add(TextEditingController());
-                      });
-                    },
-                    child: Container(
-                      width: 40,
-                      height: 40,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF2563EB),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: const Icon(Icons.add,
-                          color: Colors.white, size: 20),
-                    ),
-                  ),
-                ],
-              ],
+              ),
             ),
-          );
-        }),
-      ],
+            Icon(Icons.calendar_today_outlined,
+                size: 18, color: Colors.grey[500]),
+          ],
+        ),
+      ),
     );
   }
 
-  Widget _buildStep3() {
-    return Column(
-      children: [
-        _buildTextField(
-          controller: _deliveryAddressController,
-          hint: 'Delivery Address',
-          icon: Icons.location_on_outlined,
+  Widget _buildIconButton(IconData icon, VoidCallback onTap) {
+    return InkWell(
+      onTap: onTap,
+      child: Container(
+        height: 48,
+        width: 48,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: Colors.grey[300]!),
         ),
-        const SizedBox(height: 14),
-        // Delivery Date picker
-        GestureDetector(
-          onTap: _pickDate,
-          child: Container(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-            decoration: BoxDecoration(
-              color: Colors.grey[50],
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: Colors.grey[300]!),
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    _deliveryDate == null
-                        ? 'Delivery Date'
-                        : '${_deliveryDate!.month}/${_deliveryDate!.day}/${_deliveryDate!.year}',
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: _deliveryDate == null
-                          ? Colors.grey[400]
-                          : Colors.black87,
-                    ),
-                  ),
-                ),
-                Icon(Icons.calendar_today_outlined,
-                    size: 18, color: Colors.grey[500]),
-              ],
-            ),
-          ),
-        ),
-        const SizedBox(height: 14),
-        _buildDropdown(
-          value: _logistic,
-          items: _logistics,
-          hint: 'Logistic',
-          icon: Icons.local_shipping_outlined,
-          onChanged: (val) => setState(() => _logistic = val),
-        ),
-        const SizedBox(height: 14),
-        _buildTextField(
-          controller: _customerRepController,
-
-          hint: 'Customer Representative',
-          icon: Icons.person_outline,
-        ),
-      ],
-    );
-  }
-
-  Widget _buildStep4() {
-    return Column(
-      children: [
-        TextField(
-          controller: _notesController,
-          maxLines: 6,
-          decoration: InputDecoration(
-            hintText: 'Notes',
-            hintStyle:
-                TextStyle(color: Colors.grey[400], fontSize: 13),
-            filled: true,
-            fillColor: Colors.grey[50],
-            contentPadding:
-                const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(10),
-              borderSide: BorderSide(color: Colors.grey[300]!),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(10),
-              borderSide: BorderSide(color: Colors.grey[300]!),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(10),
-              borderSide:
-                  const BorderSide(color: Color(0xFF2563EB), width: 1.5),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  // ── Shared input helpers ───────────────────────────────────────────────
-
-  Widget _buildTextField({
-    required TextEditingController controller,
-    required String hint,
-    required IconData icon,
-    int maxLines = 1,
-    TextInputType keyboardType = TextInputType.text,
-  }) {
-    return TextField(
-      controller: controller,
-      maxLines: maxLines,
-          keyboardType: keyboardType,
-          decoration: InputDecoration(
-            hintText: hint,
-            hintStyle: TextStyle(color: Colors.grey[400], fontSize: 13),
-            prefixIcon: Icon(icon, size: 18, color: Colors.grey[500]),
-            filled: true,
-            fillColor: Colors.grey[50],
-            contentPadding:
-                const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(10),
-              borderSide: BorderSide(color: Colors.grey[300]!),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(10),
-              borderSide: BorderSide(color: Colors.grey[300]!),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(10),
-              borderSide:
-                  const BorderSide(color: Color(0xFF2563EB), width: 1.5),
-            ),
-          ),
-    );
-  }
-
-  Widget _buildDropdown({
-    required String? value,
-    required List<String> items,
-    required String hint,
-    required IconData icon,
-    required void Function(String?) onChanged,
-  }) {
-    return DropdownButtonFormField<String>(
-          value: value,
-          onChanged: onChanged,
-          decoration: InputDecoration(
-            hintText: hint,
-            hintStyle: TextStyle(color: Colors.grey[400], fontSize: 13),
-            prefixIcon: Icon(icon, size: 18, color: Colors.grey[500]),
-            filled: true,
-            fillColor: Colors.grey[50],
-            contentPadding:
-                const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(10),
-              borderSide: BorderSide(color: Colors.grey[300]!),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(10),
-              borderSide: BorderSide(color: Colors.grey[300]!),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(10),
-              borderSide:
-                  const BorderSide(color: Color(0xFF2563EB), width: 1.5),
-            ),
-          ),
-          items: items
-              .map((item) => DropdownMenuItem(value: item, child: Text(item)))
-              .toList(),
+        child: Icon(icon, size: 20, color: Colors.black54),
+      ),
     );
   }
 
@@ -542,8 +801,8 @@ class _AddProductScreenState extends State<AddProductScreen> {
     final isCompleted = step < _currentStep;
     final isCurrent = step == _currentStep;
     return Container(
-      width: 30,
-      height: 30,
+      width: 28,
+      height: 28,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
         color: isCompleted || isCurrent
@@ -560,7 +819,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
             : null,
       ),
       child: isCompleted
-          ? const Icon(Icons.check_rounded, color: Colors.white, size: 16)
+          ? const Icon(Icons.check, color: Colors.white, size: 16)
           : Center(
               child: Text(
                 '${step + 1}',
@@ -572,21 +831,6 @@ class _AddProductScreenState extends State<AddProductScreen> {
               ),
             ),
     );
-  }
-
-  Widget _buildStepContent(int step) {
-    switch (step) {
-      case 0:
-        return _buildStep1();
-      case 1:
-        return _buildStep2();
-      case 2:
-        return _buildStep3();
-      case 3:
-        return _buildStep4();
-      default:
-        return const SizedBox.shrink();
-    }
   }
 
   // ── Build ──────────────────────────────────────────────────────────────
@@ -645,7 +889,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      widget.reseller['companyName'] ?? '',
+                      widget.reseller.companyName,
                       style: const TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w600,
@@ -671,7 +915,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
                         children: [
                           // Left: dot + connector
                           SizedBox(
-                            width: 30,
+                            width: 28,
                             child: Column(
                               children: [
                                 GestureDetector(
@@ -709,25 +953,17 @@ class _AddProductScreenState extends State<AddProductScreen> {
                                         Text(
                                           _stepTitles[step],
                                           style: const TextStyle(
-                                            fontSize: 18,
+                                            fontSize: 14,
                                             fontWeight: FontWeight.w700,
                                             color: Colors.black87,
                                           ),
                                         ),
-                                        const SizedBox(height: 4),
-                                        Text(
-                                          _stepSubtitles[step],
-                                          style: TextStyle(
-                                            fontSize: 13,
-                                            color: Colors.grey[500],
-                                          ),
-                                        ),
-                                        const SizedBox(height: 20),
-                                        _buildStepContent(step),
+                                        const SizedBox(height: 14),
+                                        addProductDetails(),
                                         const SizedBox(height: 16),
                                       ],
                                     )
-                                  : const SizedBox(height: 46),
+                                  : const SizedBox(height: 44),
                             ),
                           ),
                         ],
@@ -739,30 +975,43 @@ class _AddProductScreenState extends State<AddProductScreen> {
             ),
 
             // ── Bottom button ────────────────────────────────────────
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: _nextStep,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: _currentStep == _totalSteps - 1
-                      ? const Color(0xFFFFC300)
-                      : const Color(0xFF2563EB),
-                  foregroundColor: _currentStep == _totalSteps - 1
-                      ? Colors.black
-                      : Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
+            if (_currentStep == _totalSteps - 1)
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: _nextStep,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFFFC300),
+                    foregroundColor: Colors.black,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8)),
+                    elevation: 0,
                   ),
-                  elevation: 0,
+                  child: const Text('Submit',
+                      style: TextStyle(
+                          fontSize: 16, fontWeight: FontWeight.w700)),
                 ),
-                child: Text(
-                  _currentStep == _totalSteps - 1 ? 'Submit' : 'Next',
-                  style: const TextStyle(
-                      fontSize: 15, fontWeight: FontWeight.w600),
+              )
+            else
+              Align(
+                alignment: Alignment.centerRight,
+                child: ElevatedButton(
+                  onPressed: _nextStep,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF2196F3),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 40, vertical: 14),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8)),
+                    elevation: 0,
+                  ),
+                  child: const Text('Next',
+                      style: TextStyle(
+                          fontSize: 15, fontWeight: FontWeight.w600)),
                 ),
               ),
-            ),
           ],
         ),
       ),
@@ -770,4 +1019,9 @@ class _AddProductScreenState extends State<AddProductScreen> {
   }
 }
 
+class _ApplianceTypeMeta {
+  final String label;
+  final String codeField;
 
+  const _ApplianceTypeMeta(this.label, this.codeField);
+}

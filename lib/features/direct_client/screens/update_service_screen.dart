@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:intl/intl.dart';
+import '../../../shared/api/api_exception.dart';
+import '../../../shared/api/backend_api.dart';
 import '../../../shared/widgets/custom_app_bar.dart';
 
 class UpdateServiceScreen extends StatefulWidget {
@@ -17,6 +20,8 @@ class UpdateServiceScreen extends StatefulWidget {
 }
 
 class _UpdateServiceScreenState extends State<UpdateServiceScreen> {
+  final _api = BackendApi();
+
   final TextEditingController _fileController = TextEditingController();
   final TextEditingController _reportNoController = TextEditingController();
   final TextEditingController _serviceDateController = TextEditingController();
@@ -32,47 +37,63 @@ class _UpdateServiceScreenState extends State<UpdateServiceScreen> {
 
   String? _selectedSerialNumber;
   String? _selectedServiceType;
+  int? _selectedEmployeeId;
 
-  final List<String> _serialNumberOptions = [
-    'Select Shop Type',
-    '503KWEQWEJ44 (Bulla Crave)',
-  ];
-  final List<String> _serviceTypeOptions = [
-    'Select Service Type',
-    'Delivery & Installation',
-    'Check Up',
-    'Repair',
-  ];
-  final List<String> _technicianOptions = [
-    'glendavaleroso25@gmail.com',
-    'nurwedatuoto@gmail.com',
-    'joejeetbibbigan@gmail.com',
-  ];
+  bool _isLoading = false;
+  bool _isSaving = false;
+  String? _errorText;
+  Map<String, String> _fieldErrors = {};
+
+  int? _serviceId;
+  int? _clientId;
+  int? _shopId;
+  String? _selectedServiceTypeId;
+
+  List<Map<String, dynamic>> _serviceTypeRows = const [];
+  List<Map<String, dynamic>> _employeeRows = const [];
+
+  final List<String> _serialNumberOptions = [];
+  final List<String> _serviceTypeOptions = [];
+  final List<String> _technicianOptions = [];
 
   @override
   void initState() {
     super.initState();
+    _serviceId = int.tryParse(widget.service['id'] ?? '');
+    _clientId = int.tryParse(widget.service['client_id'] ?? '');
+    _shopId = int.tryParse(widget.service['shop_id'] ?? '');
+
     _fileController.text = '';
     _reportNoController.text = widget.service['controlNumber'] ?? '';
-    _serviceDateController.text = widget.service['serviceDate'] ?? '07/08/2025';
+    _serviceDateController.text = widget.service['serviceDate'] ?? '';
 
-    final st = widget.service['serviceType'] ?? '';
-    if (_serviceTypeOptions.contains(st)) _selectedServiceType = st;
+    _selectedServiceType = widget.service['serviceType'];
+    _selectedServiceTypeId = widget.service['serviceTypeId'];
 
     // Seed one serial number entry
-    _serialControllers.add(TextEditingController(
-        text: widget.service['serialNumber'] ?? '503KWEQWEJ44 (Bulla Crave)'));
+    _serialControllers
+        .add(TextEditingController(text: widget.service['serialNumber'] ?? ''));
+
+    _selectedSerialNumber = widget.service['serialNumber'];
 
     // Seed one spare part entry
     _spareParts.add({
-      'controller': TextEditingController(
-          text: widget.service['spareParts'] ??
-              '593QWEKOEJOIAI241 (Bulla Crave)'),
+      'controller':
+          TextEditingController(text: widget.service['spareParts'] ?? ''),
       'qty': 1,
     });
 
     // Seed one technician
-    _selectedTechnicians.add(_technicianOptions.first);
+    final seededTechnician = widget.service['technicians'];
+    _selectedTechnicians.add(
+      seededTechnician != null && seededTechnician.trim().isNotEmpty
+          ? seededTechnician
+          : null,
+    );
+
+    _refreshSerialNumberOptions();
+
+    _loadDependencies();
   }
 
   @override
@@ -106,13 +127,17 @@ class _UpdateServiceScreenState extends State<UpdateServiceScreen> {
   }
 
   void _addSerialNumber() {
-    setState(() => _serialControllers.add(TextEditingController()));
+    setState(() {
+      _serialControllers.add(TextEditingController());
+      _refreshSerialNumberOptions();
+    });
   }
 
   void _removeSerialNumber(int index) {
     setState(() {
       _serialControllers[index].dispose();
       _serialControllers.removeAt(index);
+      _refreshSerialNumberOptions();
     });
   }
 
@@ -141,11 +166,212 @@ class _UpdateServiceScreenState extends State<UpdateServiceScreen> {
   }
 
   void _addTechnician() {
-    setState(() => _selectedTechnicians.add(_technicianOptions.first));
+    setState(() {
+      _selectedTechnicians
+          .add(_technicianOptions.isNotEmpty ? _technicianOptions.first : null);
+    });
   }
 
   void _removeTechnician(int index) {
     setState(() => _selectedTechnicians.removeAt(index));
+  }
+
+  Future<void> _loadDependencies() async {
+    setState(() {
+      _isLoading = true;
+      _errorText = null;
+    });
+
+    try {
+      final serviceTypesPage =
+          await _api.getServiceTypes(page: 1, perPage: 100);
+      final employeesPage = await _api.getEmployees(page: 1, perPage: 100);
+
+      _serviceTypeRows = serviceTypesPage.data;
+      _employeeRows = employeesPage.data
+          .map((e) => {
+                'id': e.id,
+                'name': e.name.isEmpty ? 'Employee ${e.id}' : e.name
+              })
+          .toList();
+
+      _serviceTypeOptions
+        ..clear()
+        ..addAll(_serviceTypeRows.map((row) {
+          final name = row['setypename']?.toString().trim() ?? '';
+          return name.isEmpty ? 'Service Type' : name;
+        }));
+
+      _technicianOptions
+        ..clear()
+        ..addAll(_employeeRows.map((e) => e['name'].toString()));
+
+      if (_technicianOptions.isNotEmpty &&
+          (_selectedTechnicians.isEmpty ||
+              _selectedTechnicians.first == null)) {
+        _selectedTechnicians
+          ..clear()
+          ..add(_technicianOptions.first);
+      }
+
+      if (_serviceId != null) {
+        final service = await _api.getAvailedServiceById(_serviceId!);
+
+        _reportNoController.text = service.controlNumber;
+        _serviceDateController.text = _displayDate(service.serviceDate);
+        _fileController.text = service.image;
+        _selectedSerialNumber =
+            service.serialNumberId.isEmpty ? null : service.serialNumberId;
+        _clientId = service.clientId;
+        _shopId = service.shopId;
+        _selectedEmployeeId = service.employeeId;
+        _selectedServiceTypeId = service.serviceTypeId;
+
+        final typeIndex = _serviceTypeRows.indexWhere(
+          (row) => row['id']?.toString() == _selectedServiceTypeId,
+        );
+        if (typeIndex >= 0 && typeIndex < _serviceTypeOptions.length) {
+          _selectedServiceType = _serviceTypeOptions[typeIndex];
+        } else if (_selectedServiceType != null &&
+            _selectedServiceType!.trim().isNotEmpty &&
+            !_serviceTypeOptions.contains(_selectedServiceType)) {
+          _serviceTypeOptions.add(_selectedServiceType!);
+        }
+
+        if (_selectedEmployeeId != null) {
+          final employee = _employeeRows.firstWhere(
+            (e) => e['id'] == _selectedEmployeeId,
+            orElse: () => <String, dynamic>{},
+          );
+          final name = employee['name']?.toString() ?? '';
+          if (name.isNotEmpty) {
+            _selectedTechnicians
+              ..clear()
+              ..add(name);
+          }
+        }
+      }
+
+      _refreshSerialNumberOptions();
+
+      if (!mounted) return;
+      setState(() {});
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      setState(() => _errorText = e.message);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _errorText = 'Failed to load service details.');
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  void _refreshSerialNumberOptions() {
+    _serialNumberOptions
+      ..clear()
+      ..addAll(
+        _serialControllers
+            .map((c) => c.text.trim())
+            .where((v) => v.isNotEmpty)
+            .toSet(),
+      );
+
+    if (_selectedSerialNumber != null &&
+        _selectedSerialNumber!.trim().isNotEmpty &&
+        !_serialNumberOptions.contains(_selectedSerialNumber)) {
+      _serialNumberOptions.add(_selectedSerialNumber!);
+    }
+  }
+
+  Future<void> _saveService() async {
+    if (_serviceId == null) {
+      setState(() => _errorText = 'Missing service id.');
+      return;
+    }
+
+    final selectedTechnician =
+        _selectedTechnicians.isEmpty ? null : _selectedTechnicians.first;
+    final matchedEmployee = _employeeRows.firstWhere(
+      (e) => e['name'] == selectedTechnician,
+      orElse: () => <String, dynamic>{},
+    );
+    final employeeId = matchedEmployee['id'] as int? ?? _selectedEmployeeId;
+
+    final typeIndex = _serviceTypeOptions.indexOf(_selectedServiceType ?? '');
+    if (typeIndex >= 0 && typeIndex < _serviceTypeRows.length) {
+      _selectedServiceTypeId = _serviceTypeRows[typeIndex]['id']?.toString();
+    }
+
+    setState(() {
+      _isSaving = true;
+      _errorText = null;
+      _fieldErrors = {};
+    });
+
+    final payload = <String, dynamic>{
+      'event_id': null,
+      'notes': null,
+      'service_date': _apiDate(_serviceDateController.text),
+      'image': _fileController.text.trim().isEmpty
+          ? null
+          : _fileController.text.trim(),
+      'serial_number_id': _selectedSerialNumber,
+      'control_number': _reportNoController.text.trim().isEmpty
+          ? null
+          : _reportNoController.text.trim(),
+      'service_type_id': _selectedServiceTypeId ?? '',
+      'employee_id': employeeId,
+      'client_id': _clientId,
+      'shop_id': _shopId,
+    };
+
+    try {
+      await _api.updateAvailedService(id: _serviceId!, payload: payload);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Service updated successfully.')),
+      );
+      Navigator.pop(context);
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _errorText = e.message;
+        _fieldErrors = e.fieldErrors;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _errorText = 'Failed to update service.');
+    } finally {
+      if (mounted) {
+        setState(() => _isSaving = false);
+      }
+    }
+  }
+
+  String _displayDate(String value) {
+    if (value.trim().isEmpty) return '';
+    final parsed = DateTime.tryParse(value);
+    if (parsed == null) return value;
+    return DateFormat('MM/dd/yyyy').format(parsed);
+  }
+
+  String? _apiDate(String value) {
+    final text = value.trim();
+    if (text.isEmpty) return null;
+    try {
+      return DateFormat('yyyy-MM-dd').format(
+        DateFormat('MM/dd/yyyy').parseStrict(text),
+      );
+    } catch (_) {
+      final parsed = DateTime.tryParse(text);
+      if (parsed != null) {
+        return DateFormat('yyyy-MM-dd').format(parsed);
+      }
+      return text;
+    }
   }
 
   @override
@@ -161,6 +387,17 @@ class _UpdateServiceScreenState extends State<UpdateServiceScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  if (_errorText != null) ...[
+                    Text(
+                      _errorText!,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: Color(0xFFB91C1C),
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                  ],
                   // Shop name
                   Text(
                     widget.shopName,
@@ -173,15 +410,14 @@ class _UpdateServiceScreenState extends State<UpdateServiceScreen> {
                   const SizedBox(height: 20),
 
                   // File field
-                  _buildLabel(
-                      'File (Optional - Leave blank to keep current)'),
+                  _buildLabel('File (Optional - Leave blank to keep current)'),
                   const SizedBox(height: 6),
                   Row(
                     children: [
                       Expanded(
                         child: _buildTextField(
                           controller: _fileController,
-                          hint: 'sample file(PDF ONLY)',
+                          hint: 'PDF file name',
                         ),
                       ),
                       const SizedBox(width: 8),
@@ -216,7 +452,7 @@ class _UpdateServiceScreenState extends State<UpdateServiceScreen> {
                           Expanded(
                             child: _buildTextField(
                               controller: _serialControllers[i],
-                              hint: '503KWEQWEJ44 (Bulla Crave)',
+                              hint: 'Enter serial number',
                             ),
                           ),
                           const SizedBox(width: 8),
@@ -243,11 +479,12 @@ class _UpdateServiceScreenState extends State<UpdateServiceScreen> {
                   _buildLabel('Select Serial Number'),
                   const SizedBox(height: 6),
                   _buildDropdown(
-                    value: _selectedSerialNumber,
+                    value: _serialNumberOptions.contains(_selectedSerialNumber)
+                        ? _selectedSerialNumber
+                        : null,
                     items: _serialNumberOptions,
-                    hint: 'Select Shop Type',
-                    onChanged: (v) =>
-                        setState(() => _selectedSerialNumber = v),
+                    hint: 'Select Serial Number',
+                    onChanged: (v) => setState(() => _selectedSerialNumber = v),
                   ),
                   const SizedBox(height: 12),
 
@@ -287,7 +524,7 @@ class _UpdateServiceScreenState extends State<UpdateServiceScreen> {
                             child: _buildTextField(
                               controller: _spareParts[i]['controller']
                                   as TextEditingController,
-                              hint: '593QWEKOEJOIAI241 (Bulla Crave)',
+                              hint: 'Enter spare part',
                             ),
                           ),
                           const SizedBox(width: 8),
@@ -344,7 +581,8 @@ class _UpdateServiceScreenState extends State<UpdateServiceScreen> {
                   const SizedBox(height: 6),
                   _buildTextField(
                     controller: _reportNoController,
-                    hint: 'No sample',
+                    hint: 'Enter report number',
+                    errorText: _fieldErrors['control_number'],
                   ),
                   const SizedBox(height: 16),
 
@@ -354,18 +592,17 @@ class _UpdateServiceScreenState extends State<UpdateServiceScreen> {
                   TextField(
                     controller: _serviceDateController,
                     readOnly: true,
-                    style: const TextStyle(
-                        fontSize: 14, color: Colors.black87),
+                    style: const TextStyle(fontSize: 14, color: Colors.black87),
                     decoration: InputDecoration(
                       hintText: 'MM/DD/YYYY',
-                      hintStyle: TextStyle(
-                          color: Colors.grey[400], fontSize: 14),
+                      hintStyle:
+                          TextStyle(color: Colors.grey[400], fontSize: 14),
                       filled: true,
                       fillColor: Colors.white,
                       contentPadding: const EdgeInsets.symmetric(
                           horizontal: 14, vertical: 14),
-                      suffixIcon: Icon(Icons.calendar_month,
-                          color: Colors.grey[600]),
+                      suffixIcon:
+                          Icon(Icons.calendar_month, color: Colors.grey[600]),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(8),
                         borderSide: BorderSide(color: Colors.grey[300]!),
@@ -388,11 +625,13 @@ class _UpdateServiceScreenState extends State<UpdateServiceScreen> {
                   _buildLabel('Service Type'),
                   const SizedBox(height: 6),
                   _buildDropdown(
-                    value: _selectedServiceType,
+                    value: _serviceTypeOptions.contains(_selectedServiceType)
+                        ? _selectedServiceType
+                        : null,
                     items: _serviceTypeOptions,
                     hint: 'Select Service Type',
-                    onChanged: (v) =>
-                        setState(() => _selectedServiceType = v),
+                    onChanged: (v) => setState(() => _selectedServiceType = v),
+                    errorText: _fieldErrors['service_type_id'],
                   ),
                   const SizedBox(height: 16),
 
@@ -406,11 +645,14 @@ class _UpdateServiceScreenState extends State<UpdateServiceScreen> {
                         children: [
                           Expanded(
                             child: _buildDropdown(
-                              value: _selectedTechnicians[i],
+                              value: _technicianOptions
+                                      .contains(_selectedTechnicians[i])
+                                  ? _selectedTechnicians[i]
+                                  : null,
                               items: _technicianOptions,
                               hint: 'Select Technician',
-                              onChanged: (v) => setState(
-                                  () => _selectedTechnicians[i] = v),
+                              onChanged: (v) =>
+                                  setState(() => _selectedTechnicians[i] = v),
                             ),
                           ),
                           const SizedBox(width: 8),
@@ -441,6 +683,7 @@ class _UpdateServiceScreenState extends State<UpdateServiceScreen> {
             padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
             child: ElevatedButton(
               onPressed: () async {
+                if (_isSaving || _isLoading) return;
                 final confirmed = await showDialog<bool>(
                   context: context,
                   builder: (context) => AlertDialog(
@@ -465,8 +708,7 @@ class _UpdateServiceScreenState extends State<UpdateServiceScreen> {
                   ),
                 );
                 if (confirmed == true) {
-                  // TODO: save service data
-                  Navigator.pop(context);
+                  await _saveService();
                 }
               },
               style: ElevatedButton.styleFrom(
@@ -484,6 +726,7 @@ class _UpdateServiceScreenState extends State<UpdateServiceScreen> {
               ),
             ),
           ),
+          if (_isLoading) const LinearProgressIndicator(minHeight: 2),
         ],
       ),
     );
@@ -505,12 +748,14 @@ class _UpdateServiceScreenState extends State<UpdateServiceScreen> {
   Widget _buildTextField({
     required TextEditingController controller,
     String hint = '',
+    String? errorText,
   }) {
     return TextField(
       controller: controller,
       style: const TextStyle(fontSize: 14, color: Colors.black87),
       decoration: InputDecoration(
         hintText: hint,
+        errorText: errorText,
         hintStyle: TextStyle(color: Colors.grey[400], fontSize: 14),
         filled: true,
         fillColor: Colors.white,
@@ -537,13 +782,17 @@ class _UpdateServiceScreenState extends State<UpdateServiceScreen> {
     required List<String> items,
     required String hint,
     required ValueChanged<String?> onChanged,
+    String? errorText,
   }) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.grey[300]!),
+        border: Border.all(
+            color: errorText == null
+                ? Colors.grey[300]!
+                : const Color(0xFFB91C1C)),
       ),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<String>(
@@ -589,4 +838,3 @@ class _UpdateServiceScreenState extends State<UpdateServiceScreen> {
     );
   }
 }
- 

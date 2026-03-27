@@ -8,6 +8,7 @@ class CustomTextField extends StatefulWidget {
   final bool isPassword;
   final TextEditingController? controller;
   final String? Function(String?)? validator;
+  final TextInputType? keyboardType;
 
   const CustomTextField({
     Key? key,
@@ -16,6 +17,7 @@ class CustomTextField extends StatefulWidget {
     this.isPassword = false,
     this.controller,
     this.validator,
+    this.keyboardType,
   }) : super(key: key);
 
   @override
@@ -42,9 +44,11 @@ class _CustomTextFieldState extends State<CustomTextField> {
               _isFocused = hasFocus;
             });
           },
-          child: TextField(
+          child: TextFormField(
             controller: widget.controller,
             obscureText: _obscureText,
+            validator: widget.validator,
+            keyboardType: widget.keyboardType,
             decoration: InputDecoration(
               hintText: widget.hintText,
               hintStyle: const TextStyle(
@@ -59,6 +63,7 @@ class _CustomTextFieldState extends State<CustomTextField> {
                 size: 20,
               ),
               border: InputBorder.none,
+              errorStyle: const TextStyle(fontSize: 11),
               suffixIcon: widget.isPassword
                   ? GestureDetector(
                       onTap: () {

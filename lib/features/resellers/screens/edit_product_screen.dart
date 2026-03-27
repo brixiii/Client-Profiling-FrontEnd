@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import '../../../shared/api/backend_api.dart';
+import '../../../shared/models/reseller_product.dart';
 import '../../../shared/widgets/custom_app_bar.dart';
 
 class EditProductScreen extends StatefulWidget {
-  final Map<String, dynamic> product;
+  final ResellerProduct product;
 
   const EditProductScreen({Key? key, required this.product}) : super(key: key);
 
@@ -22,30 +24,32 @@ class _EditProductScreenState extends State<EditProductScreen> {
   late final TextEditingController _logisticsController;
   late final TextEditingController _customerRepController;
 
+  final BackendApi _api = BackendApi();
+
   @override
   void initState() {
     super.initState();
     final p = widget.product;
     _modelCodeController =
-        TextEditingController(text: p['modelCode'] ?? '');
+        TextEditingController(text: p.modelCode);
     _supplierTypeController =
-        TextEditingController(text: p['supplierType'] ?? '');
+        TextEditingController(text: p.supplierType);
     _uomController =
-        TextEditingController(text: p['uom'] ?? '');
+        TextEditingController(text: p.unitsOfMeasurement);
     _quantityController =
-        TextEditingController(text: '${p['quantity'] ?? ''}');
+        TextEditingController(text: '${p.quantity}');
     _poNumberController =
-        TextEditingController(text: p['poNumber'] ?? '');
+        TextEditingController(text: p.poNumber);
     _drNumberController =
-        TextEditingController(text: p['drNumber'] ?? '');
+        TextEditingController(text: p.drNumber);
     _deliveryDateController =
-        TextEditingController(text: p['deliveryDate'] ?? '');
+        TextEditingController(text: p.deliveryDate);
     _deliveryAddressController =
-        TextEditingController(text: p['deliveryAddress'] ?? '');
+        TextEditingController(text: p.deliveryAddress);
     _logisticsController =
-        TextEditingController(text: p['logistics'] ?? '');
+        TextEditingController();
     _customerRepController =
-        TextEditingController(text: p['customerRep'] ?? '');
+        TextEditingController(text: p.customerRepresentative);
   }
 
   @override
@@ -65,7 +69,7 @@ class _EditProductScreenState extends State<EditProductScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final companyName = widget.product['companyName'] ?? '';
+    final companyName = widget.product.modelName;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7FA),
@@ -199,9 +203,36 @@ class _EditProductScreenState extends State<EditProductScreen> {
             child: Text('Cancel', style: TextStyle(color: Colors.grey[700])),
           ),
           TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              Navigator.pop(context);
+            onPressed: () async {
+              Navigator.pop(context); // close dialog
+              try {
+                await _api.updateResellerProduct(
+                  id: widget.product.id,
+                  payload: {
+                    'model_code': _modelCodeController.text.trim(),
+                    'unitsofmeasurement': _uomController.text.trim(),
+                    'quantity': int.tryParse(_quantityController.text.trim()) ??
+                        widget.product.quantity,
+                    'po_number': _poNumberController.text.trim().isEmpty
+                        ? null : _poNumberController.text.trim(),
+                    'dr_number': _drNumberController.text.trim().isEmpty
+                        ? null : _drNumberController.text.trim(),
+                    'delivery_date': _deliveryDateController.text.trim().isEmpty
+                        ? null : _deliveryDateController.text.trim(),
+                    'delivery_address': _deliveryAddressController.text.trim().isEmpty
+                        ? null : _deliveryAddressController.text.trim(),
+                    'customer_representative': _customerRepController.text.trim().isEmpty
+                        ? null : _customerRepController.text.trim(),
+                  },
+                );
+                if (!mounted) return;
+                Navigator.pop(context, true);
+              } catch (_) {
+                if (!mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Failed to save changes.')),
+                );
+              }
             },
             style: TextButton.styleFrom(foregroundColor: const Color(0xFF2563EB)),
             child: const Text('Save'),

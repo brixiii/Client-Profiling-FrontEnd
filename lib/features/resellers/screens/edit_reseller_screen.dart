@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import '../../../shared/api/backend_api.dart';
+import '../../../shared/models/reseller.dart';
 import '../../../shared/widgets/custom_app_bar.dart';
 
 class EditResellerScreen extends StatefulWidget {
-  final Map<String, String> reseller;
+  final Reseller reseller;
 
   const EditResellerScreen({Key? key, required this.reseller}) : super(key: key);
 
@@ -17,19 +19,21 @@ class _EditResellerScreenState extends State<EditResellerScreen> {
   late final TextEditingController _phoneController;
   late final TextEditingController _notesController;
 
+  final BackendApi _api = BackendApi();
+
   @override
   void initState() {
     super.initState();
     _companyNameController =
-        TextEditingController(text: widget.reseller['companyName'] ?? '');
+        TextEditingController(text: widget.reseller.companyName);
     _addressController =
-        TextEditingController(text: widget.reseller['address'] ?? '');
+        TextEditingController(text: widget.reseller.address);
     _emailController =
-        TextEditingController(text: widget.reseller['email'] ?? '');
+        TextEditingController(text: widget.reseller.email);
     _phoneController =
-        TextEditingController(text: widget.reseller['phoneNumber'] ?? '');
+        TextEditingController(text: widget.reseller.phone);
     _notesController =
-        TextEditingController(text: widget.reseller['notes'] ?? '');
+        TextEditingController(text: widget.reseller.notes ?? '');
   }
 
   @override
@@ -155,9 +159,29 @@ class _EditResellerScreenState extends State<EditResellerScreen> {
             child: const Text('Cancel'),
           ),
           TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              Navigator.pop(context);
+            onPressed: () async {
+              Navigator.pop(context); // close dialog
+              try {
+                await _api.updateReseller(
+                  id: widget.reseller.id,
+                  payload: {
+                    'company_name': _companyNameController.text.trim(),
+                    'address': _addressController.text.trim(),
+                    'email': _emailController.text.trim(),
+                    'phone': _phoneController.text.trim(),
+                    'notes': _notesController.text.trim().isEmpty
+                        ? null
+                        : _notesController.text.trim(),
+                  },
+                );
+                if (!mounted) return;
+                Navigator.pop(context, true);
+              } catch (_) {
+                if (!mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Failed to save changes.')),
+                );
+              }
             },
             style: TextButton.styleFrom(foregroundColor: const Color(0xFF2563EB)),
             child: const Text('Save'),

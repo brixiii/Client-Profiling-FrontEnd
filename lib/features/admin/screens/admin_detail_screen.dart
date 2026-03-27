@@ -1,14 +1,25 @@
 ﻿import 'package:flutter/material.dart';
 import '../../../shared/widgets/custom_app_bar.dart';
+import '../../../shared/models/user.dart';
+import '../../../shared/api/backend_api.dart';
+import '../../../shared/api/api_exception.dart';
 import 'edit_admin_screen.dart';
 
-class AdminDetailScreen extends StatelessWidget {
-  final Map<String, String> admin;
+class AdminDetailScreen extends StatefulWidget {
+  final User user;
 
-  const AdminDetailScreen({Key? key, required this.admin}) : super(key: key);
+  const AdminDetailScreen({Key? key, required this.user}) : super(key: key);
+
+  @override
+  State<AdminDetailScreen> createState() => _AdminDetailScreenState();
+}
+
+class _AdminDetailScreenState extends State<AdminDetailScreen> {
+  bool _isDeleting = false;
 
   @override
   Widget build(BuildContext context) {
+    final user = widget.user;
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: CustomAppBar(
@@ -27,7 +38,7 @@ class AdminDetailScreen extends StatelessWidget {
           children: [
             // Role as bold heading
             Text(
-              admin['role'] ?? '',
+              user.role,
               style: const TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.bold,
@@ -36,12 +47,12 @@ class AdminDetailScreen extends StatelessWidget {
             ),
             const SizedBox(height: 20),
 
-            _buildField('Name', admin['name']),
-            _buildField('Username', admin['username']),
-            _buildField('Phone No.', admin['phone']),
-            _buildField('Email', admin['email']),
-            _buildField('Role', admin['role']),
-            _buildField('Address', admin['address']),
+            _buildField('Name', user.name),
+            _buildField('Username', user.username),
+            _buildField('Phone No.', user.phone),
+            _buildField('Email', user.email),
+            _buildField('Role', user.role),
+            _buildField('Address', user.address),
 
             const Spacer(),
 
@@ -50,13 +61,14 @@ class AdminDetailScreen extends StatelessWidget {
               width: double.infinity,
               height: 50,
               child: ElevatedButton(
-                onPressed: () {
-                  Navigator.push(
+                onPressed: () async {
+                  final result = await Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (context) => EditAdminScreen(admin: admin),
+                      builder: (context) => EditAdminScreen(user: user),
                     ),
                   );
+                  if (result == true && mounted) Navigator.pop(context, 'updated');
                 },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFFFFC107),
@@ -80,7 +92,7 @@ class AdminDetailScreen extends StatelessWidget {
               width: double.infinity,
               height: 50,
               child: ElevatedButton(
-                onPressed: () => _confirmDelete(context),
+                onPressed: _isDeleting ? null : () => _confirmDelete(context),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFFE53935),
                   foregroundColor: Colors.white,
@@ -93,7 +105,16 @@ class AdminDetailScreen extends StatelessWidget {
                     fontWeight: FontWeight.w600,
                   ),
                 ),
-                child: const Text('Delete'),
+                child: _isDeleting
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : const Text('Delete'),
               ),
             ),
             const SizedBox(height: 16),
@@ -135,17 +156,16 @@ class AdminDetailScreen extends StatelessWidget {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Delete Admin'),
-        content: Text('Are you sure you want to delete ${admin['name']}?'),
+        content: Text('Are you sure you want to delete ${widget.user.name}?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
             child: const Text('Cancel'),
           ),
           TextButton(
-            onPressed: () {
+            onPressed: () async {
               Navigator.pop(ctx);
-              Navigator.pop(context);
-              // TODO: remove from list when wired to backend
+              await _deleteUser();
             },
             style: TextButton.styleFrom(foregroundColor: Colors.red),
             child: const Text('Delete'),
@@ -153,5 +173,26 @@ class AdminDetailScreen extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  Future<void> _deleteUser() async {
+    setState(() => _isDeleting = true);
+    try {
+      await BackendApi().deleteUser(widget.user.id);
+      if (!mounted) return;
+      Navigator.pop(context, 'deleted');
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.message)),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Failed to delete. Please try again.')),
+      );
+    } finally {
+      if (mounted) setState(() => _isDeleting = false);
+    }
   }
 }

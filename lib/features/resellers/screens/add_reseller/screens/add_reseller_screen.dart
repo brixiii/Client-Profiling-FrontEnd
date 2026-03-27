@@ -1,4 +1,5 @@
 ﻿import 'package:flutter/material.dart';
+import '../../../../../../shared/api/backend_api.dart';
 import '../../../../../../shared/widgets/custom_app_bar.dart';
 
 class AddResellerScreen extends StatefulWidget {
@@ -9,29 +10,19 @@ class AddResellerScreen extends StatefulWidget {
 }
 
 class _AddResellerScreenState extends State<AddResellerScreen> {
-  int _currentStep = 0;
-  final _formKey = GlobalKey<FormState>();
+  int _step = 0;
 
-  // Form controllers
-  final _nameController = TextEditingController();
+  final _step0Key = GlobalKey<FormState>();
+  final _step1Key = GlobalKey<FormState>();
+  final _step2Key = GlobalKey<FormState>();
+
+  final _nameController    = TextEditingController();
   final _addressController = TextEditingController();
-  final _emailController = TextEditingController();
-  final _phoneController = TextEditingController();
+  final _emailController   = TextEditingController();
+  final _phoneController   = TextEditingController();
+  final _notesController   = TextEditingController();
 
-  // Step metadata
-  static const _stepTitles = [
-    'Company Name',
-    'Address',
-    'Email Address',
-    'Phone Number',
-  ];
-
-  static const _stepSubtitles = [
-    'Enter the registered company name',
-    'Enter the company address',
-    'Enter a valid email address',
-    'Enter the contact phone number',
-  ];
+  final BackendApi _api = BackendApi();
 
   @override
   void dispose() {
@@ -39,84 +30,120 @@ class _AddResellerScreenState extends State<AddResellerScreen> {
     _addressController.dispose();
     _emailController.dispose();
     _phoneController.dispose();
+    _notesController.dispose();
     super.dispose();
   }
 
-  // Advance step or submit on the last step
-  void _nextStep() {
-    if (!(_formKey.currentState?.validate() ?? false)) return;
-    if (_currentStep < 3) {
-      setState(() => _currentStep++);
-    } else {
-      _showConfirmDialog();
+  GlobalKey<FormState> get _currentKey {
+    switch (_step) {
+      case 0:  return _step0Key;
+      case 1:  return _step1Key;
+      default: return _step2Key;
     }
   }
 
-  void _showConfirmDialog() {
+  void _next() {
+    if (!(_currentKey.currentState?.validate() ?? false)) return;
+    if (_step < 2) {
+      setState(() => _step++);
+    } else {
+      _showConfirmation();
+    }
+  }
+
+  void _showConfirmation() {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => Container(
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-        ),
-        padding: EdgeInsets.fromLTRB(
-            24, 20, 24, MediaQuery.of(context).viewInsets.bottom + 32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Center(
-              child: Container(
-                width: 40,
-                height: 4,
-                margin: const EdgeInsets.only(bottom: 20),
-                decoration: BoxDecoration(
-                  color: Colors.grey[300],
-                  borderRadius: BorderRadius.circular(2),
+      builder: (_) => Padding(
+        padding: EdgeInsets.only(
+            bottom: MediaQuery.of(context).viewInsets.bottom),
+        child: Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Handle bar
+              Center(
+                child: Container(
+                  width: 40, height: 4,
+                  margin: const EdgeInsets.only(bottom: 20),
+                  decoration: BoxDecoration(
+                    color: Colors.grey[300],
+                    borderRadius: BorderRadius.circular(2),
+                  ),
                 ),
               ),
-            ),
-            _summaryRow('Company Name',
-                _nameController.text.isEmpty ? '-' : _nameController.text),
-            _summaryRow('Address',
-                _addressController.text.isEmpty ? '-' : _addressController.text),
-            _summaryRow('Email',
-                _emailController.text.isEmpty ? '-' : _emailController.text),
-            _summaryRow('Phone No.',
-                _phoneController.text.isEmpty ? '-' : _phoneController.text),
-            const SizedBox(height: 24),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: () {
-                  Navigator.pop(context); // close bottom sheet
-                  Navigator.pop(context); // go back to resellers screen
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFFFC300),
-                  foregroundColor: Colors.black,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8)),
-                  elevation: 0,
+              _summaryRow('Company Name',
+                  _nameController.text.isEmpty ? '-' : _nameController.text),
+              _summaryRow('Address',
+                  _addressController.text.isEmpty ? '-' : _addressController.text),
+              _summaryRow('Email Address',
+                  _emailController.text.isEmpty ? '-' : _emailController.text),
+              _summaryRow('Phone No.',
+                  _phoneController.text.isEmpty ? '-' : _phoneController.text),
+              _summaryRow('Notes',
+                  _notesController.text.isEmpty ? 'N/A' : _notesController.text),
+              const SizedBox(height: 20),
+              SizedBox(
+                width: double.infinity,
+                height: 50,
+                child: ElevatedButton(
+                  onPressed: () {
+                    Navigator.pop(context); // close sheet
+                    _submitReseller();
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFFFC300),
+                    foregroundColor: Colors.black87,
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8)),
+                  ),
+                  child: const Text('Confirm',
+                      style: TextStyle(
+                          fontSize: 16, fontWeight: FontWeight.w700)),
                 ),
-                child: const Text('Confirm',
-                    style: TextStyle(
-                        fontSize: 16, fontWeight: FontWeight.w700)),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
   }
 
+  Future<void> _submitReseller() async {
+    try {
+      await _api.createReseller({
+        'company_name': _nameController.text.trim(),
+        'address': _addressController.text.trim(),
+        'email': _emailController.text.trim().isEmpty
+            ? null
+            : _emailController.text.trim(),
+        'phone': _phoneController.text.trim(),
+        'notes': _notesController.text.trim().isEmpty
+            ? null
+            : _notesController.text.trim(),
+      });
+      if (!mounted) return;
+      Navigator.pop(context, true);
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Failed to add reseller.')),
+      );
+    }
+  }
+
   Widget _summaryRow(String label, String value) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.only(bottom: 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -125,123 +152,11 @@ class _AddResellerScreenState extends State<AddResellerScreen> {
           const SizedBox(height: 2),
           Text(value,
               style: const TextStyle(
-                  fontSize: 15,
+                  fontSize: 14,
                   color: Colors.black87,
                   fontWeight: FontWeight.w500)),
         ],
       ),
-    );
-  }
-
-  // Build the input for the current step
-  Widget _buildStepContent() {
-    switch (_currentStep) {
-      case 0:
-        return _buildTextField(
-          controller: _nameController,
-          hint: 'e.g. TechFlow Solutions',
-          icon: Icons.business_outlined,
-          label: 'Company Name',
-          required: true,
-        );
-      case 1:
-        return _buildTextField(
-          controller: _addressController,
-          hint: 'e.g. #3 Mon el Drive Subd., Brgy. San Antonio',
-          icon: Icons.location_on_outlined,
-          label: 'Address',
-          maxLines: 3,
-          required: true,
-        );
-      case 2:
-        return _buildTextField(
-          controller: _emailController,
-          hint: 'e.g. contact@company.com',
-          icon: Icons.email_outlined,
-          label: 'Email Address',
-          keyboardType: TextInputType.emailAddress,
-          required: true,
-        );
-      case 3:
-        return _buildTextField(
-          controller: _phoneController,
-          hint: 'e.g. +1 (555) 123-4567',
-          icon: Icons.phone_outlined,
-          label: 'Phone Number',
-          keyboardType: TextInputType.phone,
-          required: true,
-        );
-      default:
-        return const SizedBox.shrink();
-    }
-  }
-
-  Widget _buildTextField({
-    required TextEditingController controller,
-    required String hint,
-    required IconData icon,
-    required String label,
-    int maxLines = 1,
-    TextInputType keyboardType = TextInputType.text,
-    bool required = false,
-  }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: const TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.w600,
-            color: Colors.black54,
-          ),
-        ),
-        const SizedBox(height: 8),
-        TextFormField(
-          controller: controller,
-          maxLines: maxLines,
-          keyboardType: keyboardType,
-          validator: required
-              ? (v) => (v == null || v.trim().isEmpty)
-                  ? '$label is required'
-                  : null
-              : null,
-          decoration: InputDecoration(
-            hintText: hint,
-            hintStyle: TextStyle(color: Colors.grey[400], fontSize: 13),
-            prefixIcon: Icon(icon, size: 20, color: const Color(0xFF2563EB)),
-            filled: true,
-            fillColor: Colors.white,
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 16,
-              vertical: 14,
-            ),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(10),
-              borderSide: BorderSide(color: Colors.grey[300]!),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(10),
-              borderSide: BorderSide(color: Colors.grey[300]!),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(10),
-              borderSide:
-                  const BorderSide(color: Color(0xFF2563EB), width: 1.5),
-            ),
-            errorBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(10),
-              borderSide:
-                  const BorderSide(color: Color(0xFFEF4444), width: 1.5),
-            ),
-            focusedErrorBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(10),
-              borderSide:
-                  const BorderSide(color: Color(0xFFEF4444), width: 1.5),
-            ),
-          ),
-        ),
-      ],
     );
   }
 
@@ -250,70 +165,59 @@ class _AddResellerScreenState extends State<AddResellerScreen> {
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: CustomAppBar(
-        title: 'Add Reseller',
+        title: 'Resellers',
+        showMenuButton: false,
         actions: [
           Padding(
-            padding: const EdgeInsets.only(right: 16),
-            child: Center(
-              child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF2563EB).withOpacity(0.12),
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(
-                      color: const Color(0xFF2563EB).withOpacity(0.4)),
-                ),
-                child: Text(
-                  'Step ${_currentStep + 1} of 4',
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: Color(0xFF2563EB),
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
+            padding: const EdgeInsets.only(right: 4),
+            child: IconButton(
+              icon: const Icon(Icons.account_circle_outlined,
+                  color: Colors.black87),
+              onPressed: () {},
             ),
           ),
         ],
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Form(
-          key: _formKey,
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // ── Step content card ──────────────────────────────────
+              const Text(
+                'Add Reseller',
+                style: TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.black87,
+                ),
+              ),
+              const SizedBox(height: 20),
+
+              // ── Step rows ──────────────────────────────────────────
               Expanded(
                 child: SingleChildScrollView(
                   child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: List.generate(4, (step) {
-                      final bool isActive = step == _currentStep;
-                      final bool isLast = step == 3;
+                    children: List.generate(3, (i) {
+                      final isActive = i == _step;
+                      final isLast   = i == 2;
                       return IntrinsicHeight(
                         child: Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            // Left: circle + connector stretching to row height
+                            // Left: dot + connector
                             SizedBox(
-                              width: 30,
+                              width: 20,
                               child: Column(
                                 children: [
-                                  GestureDetector(
-                                    onTap: step <= _currentStep
-                                        ? () => setState(() => _currentStep = step)
-                                        : null,
-                                    child: _buildStepDot(step),
-                                  ),
+                                  _StepDot(active: i <= _step),
                                   if (!isLast)
                                     Expanded(
                                       child: Center(
                                         child: Container(
                                           width: 2,
-                                          color: step < _currentStep
-                                              ? const Color(0xFF2563EB)
+                                          color: i < _step
+                                              ? const Color(0xFFFFC300)
                                               : Colors.grey[300],
                                         ),
                                       ),
@@ -321,38 +225,15 @@ class _AddResellerScreenState extends State<AddResellerScreen> {
                                 ],
                               ),
                             ),
-                            const SizedBox(width: 20),
-                            // Right: form content when active, spacer otherwise
+                            const SizedBox(width: 16),
+                            // Right: fields (active) or spacer (inactive)
                             Expanded(
                               child: Padding(
-                                padding: EdgeInsets.only(bottom: isLast ? 0 : 8),
+                                padding: EdgeInsets.only(
+                                    bottom: isLast ? 0 : 8),
                                 child: isActive
-                                    ? Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            _stepTitles[step],
-                                            style: const TextStyle(
-                                              fontSize: 18,
-                                              fontWeight: FontWeight.w700,
-                                              color: Colors.black87,
-                                            ),
-                                          ),
-                                          const SizedBox(height: 4),
-                                          Text(
-                                            _stepSubtitles[step],
-                                            style: TextStyle(
-                                              fontSize: 13,
-                                              color: Colors.grey[500],
-                                            ),
-                                          ),
-                                          const SizedBox(height: 20),
-                                          _buildStepContent(),
-                                          const SizedBox(height: 16),
-                                        ],
-                                      )
-                                    : const SizedBox(height: 46),
+                                    ? _buildForm(i)
+                                    : SizedBox(height: isLast ? 0 : 44),
                               ),
                             ),
                           ],
@@ -363,31 +244,29 @@ class _AddResellerScreenState extends State<AddResellerScreen> {
                 ),
               ),
 
-              // ── Bottom: Back + Next/Submit ─────────────────────────
-              Row(
-                children: [
-                  // Next / Add Reseller button
-                  Expanded(
-                    child: ElevatedButton(
-                      onPressed: _nextStep,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF2563EB),
-                        foregroundColor: Colors.white,
-                        padding:
-                            const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        elevation: 0,
-                      ),
-                      child: Text(
-                        _currentStep == 3 ? 'Add Reseller' : 'Next',
-                        style: const TextStyle(
-                            fontSize: 15, fontWeight: FontWeight.w600),
-                      ),
-                    ),
+              // ── Bottom button ──────────────────────────────────────
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                height: 48,
+                child: ElevatedButton(
+                  onPressed: _next,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: _step == 2
+                        ? const Color(0xFFFFC300)
+                        : const Color(0xFF2563EB),
+                    foregroundColor:
+                        _step == 2 ? Colors.black87 : Colors.white,
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8)),
                   ),
-                ],
+                  child: Text(
+                    _step == 2 ? 'Submit' : 'Next',
+                    style: const TextStyle(
+                        fontSize: 15, fontWeight: FontWeight.w600),
+                  ),
+                ),
               ),
             ],
           ),
@@ -396,42 +275,150 @@ class _AddResellerScreenState extends State<AddResellerScreen> {
     );
   }
 
-  // Numbered step dot — completed / active / inactive
-  Widget _buildStepDot(int step) {
-    final isCompleted = step < _currentStep;
-    final isCurrent = step == _currentStep;
-
-    return Container(
-      width: 30,
-      height: 30,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: isCompleted || isCurrent
-            ? const Color(0xFF2563EB)
-            : Colors.grey[300],
-        boxShadow: isCompleted || isCurrent
-            ? [
-                BoxShadow(
-                  color: const Color(0xFF2563EB).withOpacity(0.3),
-                  blurRadius: 6,
-                  offset: const Offset(0, 2),
-                ),
-              ]
-            : null,
-      ),
-      child: isCompleted
-          ? const Icon(Icons.check_rounded, color: Colors.white, size: 16)
-          : Center(
-              child: Text(
-                '${step + 1}',
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700,
-                  color: isCurrent ? Colors.white : Colors.black38,
-                ),
+  // ── Per-step form widgets ────────────────────────────────────────────────
+  Widget _buildForm(int stepIndex) {
+    switch (stepIndex) {
+      // Step 1 — Company Name + Address
+      case 0:
+        return Form(
+          key: _step0Key,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildField(
+                controller: _nameController,
+                hint: 'Company Name',
+                validator: (v) => (v == null || v.trim().isEmpty)
+                    ? 'Company name is required'
+                    : null,
               ),
-            ),
-    );
+              const SizedBox(height: 10),
+              _buildField(
+                controller: _addressController,
+                hint: 'Address',
+                validator: (v) => (v == null || v.trim().isEmpty)
+                    ? 'Address is required'
+                    : null,
+              ),
+              const SizedBox(height: 12),
+            ],
+          ),
+        );
+      // Step 2 — Email + Phone
+      case 1:
+        return Form(
+          key: _step1Key,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildField(
+                controller: _emailController,
+                hint: 'Email Address (Optional)',
+                keyboardType: TextInputType.emailAddress,
+                validator: (v) {
+                  if (v == null || v.trim().isEmpty) return null;
+                  final ok = RegExp(r'^[^@]+@[^@]+\.[^@]+')
+                      .hasMatch(v.trim());
+                  return ok ? null : 'Enter a valid email address';
+                },
+              ),
+              const SizedBox(height: 10),
+              _buildField(
+                controller: _phoneController,
+                hint: 'Phone No.',
+                keyboardType: TextInputType.phone,
+                validator: (v) {
+                  if (v == null || v.trim().isEmpty)
+                    return 'Phone number is required';
+                  final digits =
+                      v.trim().replaceAll(RegExp(r'\D'), '');
+                  if (digits.length != 11)
+                    return 'Phone number must be 11 digits';
+                  return null;
+                },
+              ),
+              const SizedBox(height: 12),
+            ],
+          ),
+        );
+      // Step 3 — Notes
+      default:
+        return Form(
+          key: _step2Key,
+          child: Column(
+            children: [
+              _buildField(
+                controller: _notesController,
+                hint: 'Notes',
+                maxLines: 5,
+              ),
+              const SizedBox(height: 12),
+            ],
+          ),
+        );
+    }
   }
 
+  Widget _buildField({
+    required TextEditingController controller,
+    required String hint,
+    TextInputType keyboardType = TextInputType.text,
+    int maxLines = 1,
+    String? Function(String?)? validator,
+  }) {
+    return TextFormField(
+      controller: controller,
+      keyboardType: keyboardType,
+      maxLines: maxLines,
+      validator: validator,
+      style: const TextStyle(fontSize: 13, color: Colors.black87),
+      decoration: InputDecoration(
+        hintText: hint,
+        hintStyle: TextStyle(fontSize: 13, color: Colors.grey[400]),
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(6),
+          borderSide: BorderSide(color: Colors.grey[300]!),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(6),
+          borderSide: BorderSide(color: Colors.grey[300]!),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(6),
+          borderSide:
+              const BorderSide(color: Color(0xFF2563EB), width: 1.5),
+        ),
+        errorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(6),
+          borderSide: const BorderSide(color: Color(0xFFEF4444)),
+        ),
+        focusedErrorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(6),
+          borderSide:
+              const BorderSide(color: Color(0xFFEF4444), width: 1.5),
+        ),
+      ),
+    );
+  }
+}
+
+// ── Step dot ──────────────────────────────────────────────────────────────
+class _StepDot extends StatelessWidget {
+  final bool active;
+
+  const _StepDot({required this.active});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 16,
+      height: 16,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: active ? const Color(0xFFFFC300) : Colors.grey[300],
+      ),
+    );
+  }
 }

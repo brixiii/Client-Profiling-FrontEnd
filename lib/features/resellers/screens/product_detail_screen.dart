@@ -1,11 +1,18 @@
 import 'package:flutter/material.dart';
+import '../../../shared/api/backend_api.dart';
+import '../../../shared/models/reseller_product.dart';
 import '../../../shared/widgets/custom_app_bar.dart';
 import 'edit_product_screen.dart';
 
 class ProductDetailScreen extends StatefulWidget {
-  final Map<String, dynamic> product;
+  final ResellerProduct product;
+  final String companyName;
 
-  const ProductDetailScreen({Key? key, required this.product}) : super(key: key);
+  const ProductDetailScreen({
+    Key? key,
+    required this.product,
+    this.companyName = '',
+  }) : super(key: key);
 
   @override
   State<ProductDetailScreen> createState() => _ProductDetailScreenState();
@@ -14,6 +21,7 @@ class ProductDetailScreen extends StatefulWidget {
 class _ProductDetailScreenState extends State<ProductDetailScreen> {
   final TextEditingController _serialSearchController = TextEditingController();
   String _serialQuery = '';
+  final BackendApi _api = BackendApi();
 
   @override
   void dispose() {
@@ -22,7 +30,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
   }
 
   List<String> get filteredSerials {
-    final serials = List<String>.from(widget.product['serials'] ?? []);
+    final serials = widget.product.serials;
     if (_serialQuery.isEmpty) return serials;
     return serials
         .where((s) => s.toLowerCase().contains(_serialQuery.toLowerCase()))
@@ -31,8 +39,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final p = widget.product;
-    final companyName = p['companyName'] ?? '';
+    final companyName = widget.companyName;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7FA),
@@ -73,25 +80,25 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
               padding: const EdgeInsets.all(20),
               child: Column(
                 children: [
-                  _infoRow('Model Code', p['modelCode'] ?? ''),
+                  _infoRow('Model Code', widget.product.modelCode),
                   _divider(),
-                  _infoRow('Supplier Type', p['supplierType'] ?? ''),
+                  _infoRow('Supplier Type', widget.product.supplierType),
                   _divider(),
-                  _infoRow('UOM', p['uom'] ?? ''),
+                  _infoRow('UOM', widget.product.unitsOfMeasurement),
                   _divider(),
-                  _infoRow('Quantity', '${p['quantity'] ?? ''}'),
+                  _infoRow('Quantity', '${widget.product.quantity}'),
                   _divider(),
-                  _infoRow('PO Number', p['poNumber'] ?? ''),
+                  _infoRow('PO Number', widget.product.poNumber),
                   _divider(),
-                  _infoRow('DR Number', p['drNumber'] ?? ''),
+                  _infoRow('DR Number', widget.product.drNumber),
                   _divider(),
-                  _infoRow('Delivery Date', p['deliveryDate'] ?? ''),
+                  _infoRow('Delivery Date', widget.product.deliveryDate),
                   _divider(),
-                  _infoRow('Delivery Address', p['deliveryAddress'] ?? ''),
+                  _infoRow('Delivery Address', widget.product.deliveryAddress),
                   _divider(),
-                  _infoRow('Logistics', p['logistics'] ?? ''),
+                  _infoRow('Logistics', ''),
                   _divider(),
-                  _infoRow('Customer Representative', p['customerRep'] ?? ''),
+                  _infoRow('Customer Representative', widget.product.customerRepresentative),
                 ],
               ),
             ),
@@ -106,13 +113,16 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                     icon: Icons.edit_outlined,
                     label: 'Edit',
                     color: const Color(0xFF2563EB),
-                    onTap: () {
-                      Navigator.push(
+                    onTap: () async {
+                      final result = await Navigator.push<bool>(
                         context,
                         MaterialPageRoute(
                           builder: (_) => EditProductScreen(product: widget.product),
                         ),
                       );
+                      if (result == true && mounted) {
+                        Navigator.pop(context, true);
+                      }
                     },
                   ),
                 ),
@@ -139,9 +149,19 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                 style: TextStyle(color: Colors.grey[700])),
                           ),
                           ElevatedButton(
-                            onPressed: () {
-                              Navigator.pop(context);
-                              Navigator.pop(context);
+                            onPressed: () async {
+                              Navigator.pop(context); // close dialog
+                              try {
+                                await _api.deleteResellerProduct(widget.product.id);
+                                if (!mounted) return;
+                                Navigator.pop(context, true);
+                              } catch (_) {
+                                if (!mounted) return;
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                      content: Text('Failed to delete product.')),
+                                );
+                              }
                             },
                             style: ElevatedButton.styleFrom(
                               backgroundColor: const Color(0xFFEF4444),

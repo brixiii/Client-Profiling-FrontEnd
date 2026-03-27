@@ -1,23 +1,141 @@
 import 'package:flutter/material.dart';
-import '../../../shared/widgets/custom_app_bar.dart';
-import '../../../features/serial_number/screens/serial_number_detail_screen.dart';
+
 import '../../../features/serial_number/models/serial_number_model.dart';
+import '../../../features/serial_number/screens/serial_number_detail_screen.dart';
+import '../../../shared/api/api_exception.dart';
+import '../../../shared/api/backend_api.dart';
+import '../../../shared/models/product.dart';
+import '../../../shared/widgets/custom_app_bar.dart';
 import 'edit_product_details_screen.dart';
 
-class ProductDetailsEntitiesScreen extends StatelessWidget {
+class ProductDetailsEntitiesScreen extends StatefulWidget {
   final Map<String, String> product;
 
   const ProductDetailsEntitiesScreen({Key? key, required this.product})
       : super(key: key);
 
-  // Static demo serial numbers — replace with real data later
-  static const List<String> _serialNumbers = [
-    '502KWAT0L216',
-    '503KWELI350B',
-  ];
+  @override
+  State<ProductDetailsEntitiesScreen> createState() =>
+      _ProductDetailsEntitiesScreenState();
+}
+
+class _ProductDetailsEntitiesScreenState
+    extends State<ProductDetailsEntitiesScreen> {
+  final _api = BackendApi();
+  final _searchController = TextEditingController();
+
+  Product? _product;
+  bool _isLoading = false;
+  String? _errorText;
+
+  List<String> _serialNumbers = const [];
+
+  int? get _productId => int.tryParse(widget.product['id'] ?? '');
+
+  @override
+  void initState() {
+    super.initState();
+    _seedSerialNumbers();
+    _loadProduct();
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  void _seedSerialNumbers() {
+    final raw =
+        widget.product['serialNumbers'] ?? widget.product['serialNumber'] ?? '';
+    final seeded =
+        raw.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
+
+    _serialNumbers = seeded;
+  }
+
+  Future<void> _loadProduct() async {
+    if (_productId == null) return;
+
+    setState(() {
+      _isLoading = true;
+      _errorText = null;
+    });
+
+    try {
+      final product = await _api.getProductById(_productId!);
+      if (!mounted) return;
+      setState(() {
+        _product = product;
+      });
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      setState(() => _errorText = e.message);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _errorText = 'Failed to load product details.');
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  Future<void> _deleteProduct() async {
+    if (_productId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Missing product id.')),
+      );
+      return;
+    }
+
+    try {
+      await _api.deleteProduct(_productId!);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Product deleted successfully.')),
+      );
+      Navigator.pop(context);
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.message)),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Failed to delete product.')),
+      );
+    }
+  }
+
+  String _value(String key, String fallback) {
+    return widget.product[key]?.trim().isNotEmpty == true
+        ? widget.product[key]!
+        : fallback;
+  }
 
   @override
   Widget build(BuildContext context) {
+    final serialRows = _serialNumbers
+        .where((sn) => sn
+            .toLowerCase()
+            .contains(_searchController.text.trim().toLowerCase()))
+        .toList();
+
+    final modelCode = _product?.modelCode ?? _value('modelCode', '');
+    final supplierType = _product?.applianceType ?? _value('supplierType', '');
+    final uom = _product?.unitsofmeasurement ?? _value('uom', '');
+    final quantity = _value('quantity', '-');
+    final poNumber = _value('poNumber', '-');
+    final drNumber = _value('drNumber', '-');
+    final contractDate = _product?.contractDate ?? _value('contractDate', '');
+    final deliveryDate = _product?.deliveryDate ?? _value('deliveryDate', '');
+    final installationDate =
+        _product?.installmentDate ?? _value('installationDate', '');
+    final employeeName =
+        _product?.employeeId.toString() ?? _value('employeeName', '-');
+
     return Scaffold(
       backgroundColor: Colors.grey[100],
       appBar: CustomAppBar(title: 'Direct Client', showMenuButton: false),
@@ -26,7 +144,6 @@ class ProductDetailsEntitiesScreen extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // ── Product Details header ─────────────────────────────────
             const Text(
               'Product Details',
               style: TextStyle(
@@ -36,8 +153,6 @@ class ProductDetailsEntitiesScreen extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 8),
-
-            // ── Product Details info card ──────────────────────────────
             Container(
               width: double.infinity,
               padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
@@ -55,28 +170,41 @@ class ProductDetailsEntitiesScreen extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _infoRow('Model Code', product['modelCode'] ?? 'CWG27MDCRB'),
+                  if (_errorText != null) ...[
+                    Text(
+                      _errorText!,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: Color(0xFFB91C1C),
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                  ],
+                  _infoRow('Model Code', modelCode.isEmpty ? '-' : modelCode),
                   _divider(),
-                  _infoRow('Supplier Type', product['supplierType'] ?? 'Bulla Crave'),
+                  _infoRow('Supplier Type',
+                      supplierType.isEmpty ? '-' : supplierType),
                   _divider(),
-                  _infoRow('UOM', product['uom'] ?? '3'),
+                  _infoRow('UOM', uom.isEmpty ? '-' : uom),
                   _divider(),
-                  _infoRow('Quantity', product['quantity'] ?? '3'),
+                  _infoRow('Quantity', quantity),
                   _divider(),
-                  _infoRow('PO Number', product['poNumber'] ?? 'N/A'),
+                  _infoRow('PO Number', poNumber),
                   _divider(),
-                  _infoRow('DR Number', product['drNumber'] ?? 'N/A'),
+                  _infoRow('DR Number', drNumber),
                   _divider(),
-                  _infoRow('Contract Date', product['contractDate'] ?? '2025-04-15'),
+                  _infoRow('Contract Date',
+                      contractDate.isEmpty ? '-' : contractDate),
                   _divider(),
-                  _infoRow('Delivery Date', product['deliveryDate'] ?? '2025-04-15'),
+                  _infoRow('Delivery Date',
+                      deliveryDate.isEmpty ? '-' : deliveryDate),
                   _divider(),
-                  _infoRow('Installation Date', product['installationDate'] ?? '2025-04-15'),
+                  _infoRow('Installation Date',
+                      installationDate.isEmpty ? '-' : installationDate),
                   _divider(),
-                  _infoRow('Employee Name', product['employeeName'] ?? 'Cecile Aviles'),
+                  _infoRow('Employee Name', employeeName),
                   const SizedBox(height: 16),
-
-                  // Edit / Delete buttons
                   Row(
                     children: [
                       Expanded(
@@ -86,10 +214,10 @@ class ProductDetailsEntitiesScreen extends StatelessWidget {
                               context,
                               MaterialPageRoute(
                                 builder: (_) => EditProductDetailsScreen(
-                                  product: product,
+                                  product: widget.product,
                                 ),
                               ),
-                            );
+                            ).then((_) => _loadProduct());
                           },
                           icon: const Icon(Icons.edit, size: 18),
                           label: const Text(
@@ -140,8 +268,7 @@ class ProductDetailsEntitiesScreen extends StatelessWidget {
                               ),
                             );
                             if (confirmed == true) {
-                              // TODO: implement delete
-                              Navigator.pop(context);
+                              await _deleteProduct();
                             }
                           },
                           icon: const Icon(Icons.delete, size: 18),
@@ -168,10 +295,7 @@ class ProductDetailsEntitiesScreen extends StatelessWidget {
                 ],
               ),
             ),
-
             const SizedBox(height: 20),
-
-            // ── Serial Number Details header ───────────────────────────
             const Text(
               'Serial Number Details',
               style: TextStyle(
@@ -181,8 +305,6 @@ class ProductDetailsEntitiesScreen extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 8),
-
-            // ── Serial Number table card ───────────────────────────────
             Container(
               decoration: BoxDecoration(
                 color: Colors.white,
@@ -198,37 +320,25 @@ class ProductDetailsEntitiesScreen extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Search row
                   Padding(
                     padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
                     child: _buildSearchField('Search'),
                   ),
                   const SizedBox(height: 10),
-
-                  // Table header
                   _buildTableHeader(),
-
-                  // Data rows
-                  ..._serialNumbers.map((sn) => _buildTableRow(context, sn)),
-
-                  // Empty filler rows to match image appearance
-                  for (int i = _serialNumbers.length; i < 4; i++)
-                    _buildTableRow(context, ''),
-
-                  // Pagination footer
-                  _buildPaginationFooter(_serialNumbers.length),
+                  if (serialRows.isEmpty) _buildTableRow(context, ''),
+                  ...serialRows.map((sn) => _buildTableRow(context, sn)),
+                  _buildPaginationFooter(serialRows.length),
                 ],
               ),
             ),
-
             const SizedBox(height: 24),
+            if (_isLoading) const LinearProgressIndicator(minHeight: 2),
           ],
         ),
       ),
     );
   }
-
-  // ── Helpers ─────────────────────────────────────────────────────────────
 
   Widget _infoRow(String label, String value) {
     return Padding(
@@ -265,6 +375,8 @@ class ProductDetailsEntitiesScreen extends StatelessWidget {
     return SizedBox(
       height: 36,
       child: TextField(
+        controller: _searchController,
+        onChanged: (_) => setState(() {}),
         decoration: InputDecoration(
           hintText: hint,
           hintStyle: TextStyle(fontSize: 12, color: Colors.grey[400]),
@@ -280,8 +392,7 @@ class ProductDetailsEntitiesScreen extends StatelessWidget {
           ),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(6),
-            borderSide:
-                const BorderSide(color: Color(0xFF87CEEB), width: 1.5),
+            borderSide: const BorderSide(color: Color(0xFF87CEEB), width: 1.5),
           ),
         ),
       ),
@@ -369,14 +480,10 @@ class ProductDetailsEntitiesScreen extends StatelessWidget {
                             builder: (_) => SerialNumberDetailScreen(
                               item: SerialNumberModel(
                                 id: serialNumber,
-                                clientName:
-                                    product['employeeName'] ?? 'N/A',
-                                clientType:
-                                    product['supplierType'] ?? 'N/A',
-                                dateCreated:
-                                    product['deliveryDate'] ?? 'N/A',
-                                productModel:
-                                    product['modelCode'] ?? 'N/A',
+                                clientName: _value('employeeName', '-'),
+                                clientType: _value('supplierType', '-'),
+                                dateCreated: _value('deliveryDate', '-'),
+                                productModel: _value('modelCode', '-'),
                                 serialCodes: [serialNumber],
                               ),
                             ),
@@ -386,10 +493,10 @@ class ProductDetailsEntitiesScreen extends StatelessWidget {
                       style: OutlinedButton.styleFrom(
                         padding: const EdgeInsets.symmetric(
                             horizontal: 6, vertical: 4),
-                        side: const BorderSide(
-                            color: Color(0xFF2563EB)),
+                        side: const BorderSide(color: Color(0xFF2563EB)),
                         shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(4)),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
                       ),
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
@@ -420,7 +527,9 @@ class ProductDetailsEntitiesScreen extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Text(
-            'Showing 1 to $count of $count entries',
+            count == 0
+                ? 'Showing 0 to 0 of 0 entries'
+                : 'Showing 1 to $count of $count entries',
             style: TextStyle(fontSize: 11, color: Colors.grey[600]),
           ),
           Row(
@@ -453,7 +562,6 @@ class ProductDetailsEntitiesScreen extends StatelessWidget {
   }
 }
 
-// ── Small pagination icon button ──────────────────────────────────────────────
 class _PaginationBtn extends StatelessWidget {
   final IconData icon;
 

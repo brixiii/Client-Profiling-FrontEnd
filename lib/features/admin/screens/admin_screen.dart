@@ -2,6 +2,10 @@
 import '../../../shared/widgets/analytics_card.dart';
 import '../../../shared/widgets/app_drawer.dart';
 import '../../../shared/widgets/custom_app_bar.dart';
+import '../../../shared/models/user.dart';
+import '../../../shared/models/employee.dart';
+import '../../../shared/api/backend_api.dart';
+import '../../../shared/api/api_exception.dart';
 import 'add_admin_screen.dart';
 import 'add_employee_screen.dart';
 import 'admin_detail_screen.dart';
@@ -15,36 +19,17 @@ class AdminScreen extends StatefulWidget {
 }
 
 class _AdminScreenState extends State<AdminScreen> {
-  // ── Admin List state ─────────────────────────────────────────────────────
+  final _api = BackendApi();
+
+  // ── Admin (Users) List state ─────────────────────────────────────────────
   final TextEditingController _adminSearchController = TextEditingController();
   String _adminSearchQuery = '';
   int _adminCurrentPage = 1;
   final int _adminEntriesPerPage = 5;
-
-  final List<Map<String, String>> _admins = [
-    {
-      'name': 'Nathaniel Nagal',
-      'firstName': 'Nathaniel',
-      'middleName': 'N/A',
-      'lastName': 'Nagal',
-      'username': 'dev',
-      'phone': '0947-813-3253',
-      'email': 'bullacravecustomerservice@gmail.com',
-      'role': 'Super Admin',
-      'address': 'Star Apple Street, Kasiglahan Rodriguez Rizal',
-    },
-    {
-      'name': 'Arinthea Salamander Vargas',
-      'firstName': 'Arinthea',
-      'middleName': 'Salamander',
-      'lastName': 'Vargas',
-      'username': 'arinthea',
-      'phone': '0912-345-6789',
-      'email': 'arinthea@example.com',
-      'role': 'Admin',
-      'address': '123 Sample Street, Quezon City',
-    },
-  ];
+  List<User> _users = [];
+  bool _usersLoading = false;
+  int _adminTotalPages = 1;
+  int _adminTotal = 0;
 
   // ── Employee List state ──────────────────────────────────────────────────
   final TextEditingController _employeeSearchController =
@@ -52,50 +37,76 @@ class _AdminScreenState extends State<AdminScreen> {
   String _employeeSearchQuery = '';
   int _employeeCurrentPage = 1;
   final int _employeeEntriesPerPage = 5;
+  List<Employee> _employees = [];
+  bool _employeesLoading = false;
+  int _employeeTotalPages = 1;
+  int _employeeTotal = 0;
 
-  final List<Map<String, String>> _employees = [
-    {'name': 'Alvince Mavares', 'position': 'Salesperson'},
-    {'name': 'Marion Brix Ouling', 'position': 'Technician'},
-    {'name': 'Vivian Leigh Marion', 'position': 'Technician'},
-  ];
-
-  // ── Helpers ──────────────────────────────────────────────────────────────
-  List<Map<String, String>> get _filteredAdmins {
-    if (_adminSearchQuery.isEmpty) return _admins;
-    return _admins
-        .where((a) =>
-            a['name']!.toLowerCase().contains(_adminSearchQuery.toLowerCase()) ||
-            a['role']!.toLowerCase().contains(_adminSearchQuery.toLowerCase()))
-        .toList();
+  @override
+  void initState() {
+    super.initState();
+    _loadUsers();
+    _loadEmployees();
   }
 
-  List<Map<String, String>> get _paginatedAdmins {
-    final start = (_adminCurrentPage - 1) * _adminEntriesPerPage;
-    final filtered = _filteredAdmins;
-    if (start >= filtered.length) return [];
-    return filtered.sublist(
-        start, (start + _adminEntriesPerPage).clamp(0, filtered.length));
+  Future<void> _loadUsers() async {
+    setState(() => _usersLoading = true);
+    try {
+      final response = await _api.getUsers(
+        page: _adminCurrentPage,
+        perPage: _adminEntriesPerPage,
+        q: _adminSearchQuery.isEmpty ? null : _adminSearchQuery,
+      );
+      if (!mounted) return;
+      setState(() {
+        _users = response.data;
+        _adminTotalPages = response.lastPage.clamp(1, 9999);
+        _adminTotal = response.total;
+        _usersLoading = false;
+      });
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      setState(() => _usersLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.message)),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _usersLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Failed to load admins.')),
+      );
+    }
   }
 
-  List<Map<String, String>> get _filteredEmployees {
-    if (_employeeSearchQuery.isEmpty) return _employees;
-    return _employees
-        .where((e) =>
-            e['name']!
-                .toLowerCase()
-                .contains(_employeeSearchQuery.toLowerCase()) ||
-            e['position']!
-                .toLowerCase()
-                .contains(_employeeSearchQuery.toLowerCase()))
-        .toList();
-  }
-
-  List<Map<String, String>> get _paginatedEmployees {
-    final start = (_employeeCurrentPage - 1) * _employeeEntriesPerPage;
-    final filtered = _filteredEmployees;
-    if (start >= filtered.length) return [];
-    return filtered.sublist(
-        start, (start + _employeeEntriesPerPage).clamp(0, filtered.length));
+  Future<void> _loadEmployees() async {
+    setState(() => _employeesLoading = true);
+    try {
+      final response = await _api.getEmployees(
+        page: _employeeCurrentPage,
+        perPage: _employeeEntriesPerPage,
+        q: _employeeSearchQuery.isEmpty ? null : _employeeSearchQuery,
+      );
+      if (!mounted) return;
+      setState(() {
+        _employees = response.data;
+        _employeeTotalPages = response.lastPage.clamp(1, 9999);
+        _employeeTotal = response.total;
+        _employeesLoading = false;
+      });
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      setState(() => _employeesLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.message)),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _employeesLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Failed to load employees.')),
+      );
+    }
   }
 
   @override
@@ -112,7 +123,7 @@ class _AdminScreenState extends State<AdminScreen> {
       appBar: CustomAppBar(
         title: 'Admin',
         showMenuButton: true,
-        actions: [],
+        actions: const [],
       ),
       drawer: const AppDrawer(currentPage: 'Admin'),
       body: SingleChildScrollView(
@@ -131,26 +142,16 @@ class _AdminScreenState extends State<AdminScreen> {
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
                   childAspectRatio: 1.5,
-                  children: const [
+                  children: [
                     AnalyticsCard(
                       title: 'Number of Admins',
-                      value: '11',
-                      backgroundColor: Color(0xFFB3E5FC),
+                      value: _adminTotal.toString(),
+                      backgroundColor: const Color(0xFFB3E5FC),
                     ),
                     AnalyticsCard(
                       title: 'Number of Employee',
-                      value: '34',
-                      backgroundColor: Color(0xFFB3E5FC),
-                    ),
-                    AnalyticsCard(
-                      title: 'Total Spare Parts',
-                      value: '0',
-                      backgroundColor: Color(0xFFB3E5FC),
-                    ),
-                    AnalyticsCard(
-                      title: 'Available Spare Parts',
-                      value: '1,257',
-                      backgroundColor: Color(0xFFB3E5FC),
+                      value: _employeeTotal.toString(),
+                      backgroundColor: const Color(0xFFB3E5FC),
                     ),
                   ],
                 );
@@ -173,14 +174,9 @@ class _AdminScreenState extends State<AdminScreen> {
 
   // ── Admin List card ──────────────────────────────────────────────────────
   Widget _buildAdminList() {
-    final paginated = _paginatedAdmins;
-    final filtered = _filteredAdmins;
-    final totalPages =
-        (filtered.length / _adminEntriesPerPage).ceil().clamp(1, 9999);
-    final startEntry =
-        filtered.isEmpty ? 0 : (_adminCurrentPage - 1) * _adminEntriesPerPage + 1;
-    final endEntry =
-        (startEntry + _adminEntriesPerPage - 1).clamp(0, filtered.length);
+    final totalPages = _adminTotalPages;
+    final startEntry = _adminTotal == 0 ? 0 : (_adminCurrentPage - 1) * _adminEntriesPerPage + 1;
+    final endEntry = (startEntry + _users.length - 1).clamp(0, _adminTotal);
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -204,13 +200,17 @@ class _AdminScreenState extends State<AdminScreen> {
                 ),
               ),
               ElevatedButton.icon(
-                onPressed: () {
-                  Navigator.push(
+                onPressed: () async {
+                  final result = await Navigator.push(
                     context,
                     MaterialPageRoute(
                       builder: (context) => const AddAdminScreen(),
                     ),
                   );
+                  if (result == true) {
+                    setState(() => _adminCurrentPage = 1);
+                    _loadUsers();
+                  }
                 },
                 icon: const Icon(Icons.add, size: 16),
                 label: const Text('Add Admin'),
@@ -232,37 +232,49 @@ class _AdminScreenState extends State<AdminScreen> {
           // Search + Filter row
           _buildSearchRow(
             controller: _adminSearchController,
-            onChanged: (v) => setState(() {
-              _adminSearchQuery = v;
-              _adminCurrentPage = 1;
-            }),
+            onChanged: (v) {
+              setState(() {
+                _adminSearchQuery = v;
+                _adminCurrentPage = 1;
+              });
+              _loadUsers();
+            },
           ),
           const SizedBox(height: 12),
 
           // Table header
           _buildTableHeader(col1: 'Name', col2: 'Role'),
 
-          // Rows
-          ...paginated.map((admin) => _buildAdminTableRow(context, admin)),
+          // Rows or loading
+          if (_usersLoading)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 24),
+              child: Center(child: CircularProgressIndicator()),
+            )
+          else
+            ..._users.map((user) => _buildAdminTableRow(context, user)),
 
           const SizedBox(height: 12),
 
           // Pagination
           _buildPaginationFooter(
-            label:
-                'Showing $startEntry to $endEntry of ${filtered.length} entries',
+            label: 'Showing $startEntry to $endEntry of $_adminTotal entries',
             currentPage: _adminCurrentPage,
             totalPages: totalPages,
-            onFirst: () => setState(() => _adminCurrentPage = 1),
-            onPrev: () =>
-                setState(() {
-                  if (_adminCurrentPage > 1) _adminCurrentPage--;
-                }),
-            onNext: () =>
-                setState(() {
-                  if (_adminCurrentPage < totalPages) _adminCurrentPage++;
-                }),
-            onLast: () => setState(() => _adminCurrentPage = totalPages),
+            onFirst: () { setState(() => _adminCurrentPage = 1); _loadUsers(); },
+            onPrev: () {
+              if (_adminCurrentPage > 1) {
+                setState(() => _adminCurrentPage--);
+                _loadUsers();
+              }
+            },
+            onNext: () {
+              if (_adminCurrentPage < totalPages) {
+                setState(() => _adminCurrentPage++);
+                _loadUsers();
+              }
+            },
+            onLast: () { setState(() => _adminCurrentPage = totalPages); _loadUsers(); },
           ),
         ],
       ),
@@ -271,15 +283,9 @@ class _AdminScreenState extends State<AdminScreen> {
 
   // ── Employee List card ───────────────────────────────────────────────────
   Widget _buildEmployeeList() {
-    final paginated = _paginatedEmployees;
-    final filtered = _filteredEmployees;
-    final totalPages =
-        (filtered.length / _employeeEntriesPerPage).ceil().clamp(1, 9999);
-    final startEntry = filtered.isEmpty
-        ? 0
-        : (_employeeCurrentPage - 1) * _employeeEntriesPerPage + 1;
-    final endEntry =
-        (startEntry + _employeeEntriesPerPage - 1).clamp(0, filtered.length);
+    final totalPages = _employeeTotalPages;
+    final startEntry = _employeeTotal == 0 ? 0 : (_employeeCurrentPage - 1) * _employeeEntriesPerPage + 1;
+    final endEntry = (startEntry + _employees.length - 1).clamp(0, _employeeTotal);
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -303,13 +309,17 @@ class _AdminScreenState extends State<AdminScreen> {
                 ),
               ),
               ElevatedButton.icon(
-                onPressed: () {
-                  Navigator.push(
+                onPressed: () async {
+                  final result = await Navigator.push(
                     context,
                     MaterialPageRoute(
                       builder: (context) => const AddEmployeeScreen(),
                     ),
                   );
+                  if (result == true) {
+                    setState(() => _employeeCurrentPage = 1);
+                    _loadEmployees();
+                  }
                 },
                 icon: const Icon(Icons.add, size: 16),
                 label: const Text('Add Employee'),
@@ -331,37 +341,49 @@ class _AdminScreenState extends State<AdminScreen> {
           // Search + Filter row
           _buildSearchRow(
             controller: _employeeSearchController,
-            onChanged: (v) => setState(() {
-              _employeeSearchQuery = v;
-              _employeeCurrentPage = 1;
-            }),
+            onChanged: (v) {
+              setState(() {
+                _employeeSearchQuery = v;
+                _employeeCurrentPage = 1;
+              });
+              _loadEmployees();
+            },
           ),
           const SizedBox(height: 12),
 
           // Table header
           _buildTableHeader(col1: 'Name', col2: 'Position'),
 
-          // Rows
-          ...paginated.map((emp) => _buildEmployeeTableRow(context, emp)),
+          // Rows or loading
+          if (_employeesLoading)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 24),
+              child: Center(child: CircularProgressIndicator()),
+            )
+          else
+            ..._employees.map((emp) => _buildEmployeeTableRow(context, emp)),
 
           const SizedBox(height: 12),
 
           // Pagination
           _buildPaginationFooter(
-            label:
-                'Showing $startEntry to $endEntry of ${filtered.length} entries',
+            label: 'Showing $startEntry to $endEntry of $_employeeTotal entries',
             currentPage: _employeeCurrentPage,
             totalPages: totalPages,
-            onFirst: () => setState(() => _employeeCurrentPage = 1),
-            onPrev: () =>
-                setState(() {
-                  if (_employeeCurrentPage > 1) _employeeCurrentPage--;
-                }),
-            onNext: () =>
-                setState(() {
-                  if (_employeeCurrentPage < totalPages) _employeeCurrentPage++;
-                }),
-            onLast: () => setState(() => _employeeCurrentPage = totalPages),
+            onFirst: () { setState(() => _employeeCurrentPage = 1); _loadEmployees(); },
+            onPrev: () {
+              if (_employeeCurrentPage > 1) {
+                setState(() => _employeeCurrentPage--);
+                _loadEmployees();
+              }
+            },
+            onNext: () {
+              if (_employeeCurrentPage < totalPages) {
+                setState(() => _employeeCurrentPage++);
+                _loadEmployees();
+              }
+            },
+            onLast: () { setState(() => _employeeCurrentPage = totalPages); _loadEmployees(); },
           ),
         ],
       ),
@@ -462,7 +484,7 @@ class _AdminScreenState extends State<AdminScreen> {
     );
   }
 
-  Widget _buildAdminTableRow(BuildContext context, Map<String, String> admin) {
+  Widget _buildAdminTableRow(BuildContext context, User user) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
       decoration: BoxDecoration(
@@ -472,23 +494,26 @@ class _AdminScreenState extends State<AdminScreen> {
         children: [
           Expanded(
             flex: 3,
-            child: Text(admin['name']!,
+            child: Text(user.name,
                 style: const TextStyle(fontSize: 13, color: Colors.black87)),
           ),
           Expanded(
             flex: 2,
-            child: Text(admin['role']!,
+            child: Text(user.role,
                 style: const TextStyle(fontSize: 13, color: Colors.black87)),
           ),
           SizedBox(
             width: 72,
             child: OutlinedButton(
-              onPressed: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => AdminDetailScreen(admin: admin),
-                ),
-              ),
+              onPressed: () async {
+                final result = await Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => AdminDetailScreen(user: user),
+                  ),
+                );
+                if (result != null) _loadUsers();
+              },
               style: OutlinedButton.styleFrom(
                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
                 side: const BorderSide(color: Color(0xFF2563EB)),
@@ -516,7 +541,7 @@ class _AdminScreenState extends State<AdminScreen> {
     );
   }
 
-  Widget _buildEmployeeTableRow(BuildContext context, Map<String, String> emp) {
+  Widget _buildEmployeeTableRow(BuildContext context, Employee emp) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
       decoration: BoxDecoration(
@@ -526,23 +551,26 @@ class _AdminScreenState extends State<AdminScreen> {
         children: [
           Expanded(
             flex: 3,
-            child: Text(emp['name']!,
+            child: Text(emp.name,
                 style: const TextStyle(fontSize: 13, color: Colors.black87)),
           ),
           Expanded(
             flex: 2,
-            child: Text(emp['position']!,
+            child: Text(emp.role,
                 style: const TextStyle(fontSize: 13, color: Colors.black87)),
           ),
           SizedBox(
             width: 72,
             child: OutlinedButton(
-              onPressed: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => EmployeeDetailScreen(employee: emp),
-                ),
-              ),
+              onPressed: () async {
+                final result = await Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => EmployeeDetailScreen(employee: emp),
+                  ),
+                );
+                if (result != null) _loadEmployees();
+              },
               style: OutlinedButton.styleFrom(
                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
                 side: const BorderSide(color: Color(0xFF2563EB)),

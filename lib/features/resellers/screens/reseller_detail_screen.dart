@@ -1,11 +1,14 @@
 ﻿import 'package:flutter/material.dart';
+import '../../../shared/api/backend_api.dart';
+import '../../../shared/models/reseller.dart';
+import '../../../shared/models/reseller_product.dart';
 import '../../../shared/widgets/custom_app_bar.dart';
 import 'edit_reseller_screen.dart';
 import 'add_reseller/screens/add_product_screen.dart';
 import 'product_detail_screen.dart';
 
 class ResellerDetailScreen extends StatefulWidget {
-  final Map<String, String> reseller;
+  final Reseller reseller;
 
   const ResellerDetailScreen({Key? key, required this.reseller}) : super(key: key);
 
@@ -19,50 +22,51 @@ class _ResellerDetailScreenState extends State<ResellerDetailScreen> {
   int _currentPage = 1;
   String _searchQuery = '';
 
-  // Product data - replace with backend data when ready
-  final List<Map<String, dynamic>> products = [
-    {
-      'modelName': 'TechFlow Laptop Pro',
-      'purchaseOrder': 'PO-2024-001',
-      'modelCode': 'CWG27MDCRB',
-      'supplierType': 'Other',
-      'uom': 'UCM',
-      'quantity': 1,
-      'poNumber': 'PO-2024-001',
-      'drNumber': 'DR-2024-001',
-      'deliveryDate': '2026-03-20',
-      'deliveryAddress': 'Bulla Crave',
-      'logistics': 'N/A',
-      'customerRep': 'Marion Brix Quiling',
-      'serials': ['405KWOWNU717'],
-      'companyName': '',
-    },
+  final BackendApi _api = BackendApi();
+  late Reseller _reseller;
+  List<ResellerProduct> _products = [];
+  bool _isLoadingDetail = true;
 
-  ];
-
-  List<Map<String, dynamic>> get filteredProducts {
-    if (_searchQuery.isEmpty) {
-      return products;
-    }
-    return products.where((product) {
-      return product['modelName']!.toLowerCase().contains(_searchQuery.toLowerCase()) ||
-          product['purchaseOrder']!.toLowerCase().contains(_searchQuery.toLowerCase());
-    }).toList();
+  List<ResellerProduct> get filteredProducts {
+    if (_searchQuery.isEmpty) return _products;
+    return _products.where((p) =>
+      p.modelName.toLowerCase().contains(_searchQuery.toLowerCase()) ||
+      p.poNumber.toLowerCase().contains(_searchQuery.toLowerCase())
+    ).toList();
   }
 
-  List<Map<String, dynamic>> get paginatedProducts {
-    final startIndex = (_currentPage - 1) * _entriesPerPage;
-    final endIndex = startIndex + _entriesPerPage;
+  List<ResellerProduct> get paginatedProducts {
+    final start = (_currentPage - 1) * _entriesPerPage;
+    final end = start + _entriesPerPage;
     final filtered = filteredProducts;
-    if (startIndex >= filtered.length) return [];
-    return filtered.sublist(
-      startIndex,
-      endIndex > filtered.length ? filtered.length : endIndex,
-    );
+    if (start >= filtered.length) return [];
+    return filtered.sublist(start, end > filtered.length ? filtered.length : end);
   }
 
   int get totalPages {
     return (filteredProducts.length / _entriesPerPage).ceil();
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _reseller = widget.reseller;
+    _loadDetail();
+  }
+
+  Future<void> _loadDetail() async {
+    try {
+      final detail = await _api.getResellerById(widget.reseller.id);
+      if (!mounted) return;
+      setState(() {
+        _reseller = detail;
+        _products = detail.products;
+        _isLoadingDetail = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _isLoadingDetail = false);
+    }
   }
 
   @override
@@ -130,7 +134,7 @@ class _ResellerDetailScreenState extends State<ResellerDetailScreen> {
                           ),
                           child: Center(
                             child: Text(
-                              (widget.reseller['companyName'] ?? 'R')
+                                (widget.reseller.companyName)
                                   .substring(0, 1)
                                   .toUpperCase(),
                               style: const TextStyle(
@@ -147,7 +151,7 @@ class _ResellerDetailScreenState extends State<ResellerDetailScreen> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                widget.reseller['companyName'] ?? '',
+                                widget.reseller.companyName,
                                 style: const TextStyle(
                                   fontSize: 17,
                                   fontWeight: FontWeight.w700,
@@ -186,19 +190,19 @@ class _ResellerDetailScreenState extends State<ResellerDetailScreen> {
                         _buildInfoRow(
                           Icons.location_on_outlined,
                           'Address',
-                          '#3 Mon el Drive Subd.\nBrgy. San Antonio',
+                          _reseller.address.isEmpty ? 'N/A' : _reseller.address,
                         ),
                         const SizedBox(height: 14),
                         _buildInfoRow(
                           Icons.email_outlined,
                           'Email',
-                          widget.reseller['email']!,
+                          _reseller.email.isEmpty ? 'N/A' : _reseller.email,
                         ),
                         const SizedBox(height: 14),
                         _buildInfoRow(
                           Icons.phone_outlined,
                           'Phone No.',
-                          widget.reseller['phoneNumber']!,
+                          _reseller.phone.isEmpty ? 'N/A' : _reseller.phone,
                         ),
                         const SizedBox(height: 20),
 
@@ -207,15 +211,16 @@ class _ResellerDetailScreenState extends State<ResellerDetailScreen> {
                           children: [
                             Expanded(
                               child: ElevatedButton.icon(
-                                onPressed: () {
-                                  Navigator.push(
+                                onPressed: () async {
+                                  final result = await Navigator.push<bool>(
                                     context,
                                     MaterialPageRoute(
                                       builder: (_) => EditResellerScreen(
-                                        reseller: widget.reseller,
+                                        reseller: _reseller,
                                       ),
                                     ),
                                   );
+                                  if (result == true && mounted) _loadDetail();
                                 },
                                 icon: const Icon(Icons.edit_outlined, size: 18),
                                 label: const Text('Edit'),
@@ -310,8 +315,8 @@ class _ResellerDetailScreenState extends State<ResellerDetailScreen> {
                           ],
                         ),
                         ElevatedButton.icon(
-                          onPressed: () {
-                            Navigator.push(
+                          onPressed: () async {
+                            final result = await Navigator.push<bool>(
                               context,
                               MaterialPageRoute(
                                 builder: (_) => AddProductScreen(
@@ -319,6 +324,7 @@ class _ResellerDetailScreenState extends State<ResellerDetailScreen> {
                                 ),
                               ),
                             );
+                            if (result == true && mounted) _loadDetail();
                           },
                           icon: const Icon(Icons.add_rounded, size: 16),
                           label: const Text('Add Product'),
@@ -452,7 +458,12 @@ class _ResellerDetailScreenState extends State<ResellerDetailScreen> {
                   ),
 
                   // Table rows / empty state
-                  if (paginatedProducts.isEmpty)
+                  if (_isLoadingDetail)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 40),
+                      child: Center(child: CircularProgressIndicator()),
+                    )
+                  else if (paginatedProducts.isEmpty)
                     Padding(
                       padding: const EdgeInsets.symmetric(vertical: 40),
                       child: Center(
@@ -492,14 +503,14 @@ class _ResellerDetailScreenState extends State<ResellerDetailScreen> {
                           children: [
                             Expanded(
                               child: Text(
-                                product['modelName']!,
+                                product.modelName,
                                 style: const TextStyle(
                                     fontSize: 13, color: Colors.black87),
                               ),
                             ),
                             Expanded(
                               child: Text(
-                                product['purchaseOrder']!,
+                                product.poNumber,
                                 textAlign: TextAlign.center,
                                 style: TextStyle(
                                     fontSize: 13, color: Colors.grey[700]),
@@ -508,18 +519,17 @@ class _ResellerDetailScreenState extends State<ResellerDetailScreen> {
                             SizedBox(
                               width: 72,
                               child: OutlinedButton(
-                                onPressed: () {
-                                  Navigator.push(
+                                onPressed: () async {
+                                  final result = await Navigator.push<bool>(
                                     context,
                                     MaterialPageRoute(
                                       builder: (_) => ProductDetailScreen(
-                                        product: {
-                                          ...product,
-                                          'companyName': widget.reseller['companyName'] ?? '',
-                                        },
+                                        product: product,
+                                        companyName: _reseller.companyName,
                                       ),
                                     ),
                                   );
+                                  if (result == true && mounted) _loadDetail();
                                 },
                                 style: OutlinedButton.styleFrom(
                                   padding: const EdgeInsets.symmetric(
@@ -685,7 +695,7 @@ class _ResellerDetailScreenState extends State<ResellerDetailScreen> {
             ),
           ),
           content: Text(
-            'Are you sure you want to delete ${widget.reseller['companyName']}? This action cannot be undone.',
+            'Are you sure you want to delete ${widget.reseller.companyName}? This action cannot be undone.',
           ),
           actions: [
             TextButton(
@@ -701,16 +711,24 @@ class _ResellerDetailScreenState extends State<ResellerDetailScreen> {
               ),
             ),
             ElevatedButton(
-              onPressed: () {
+              onPressed: () async {
                 Navigator.of(context).pop();
-                // TODO: Implement delete functionality
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Reseller deleted successfully'),
-                    backgroundColor: Color(0xFFE74C3C),
-                  ),
-                );
-                Navigator.of(context).pop();
+                try {
+                  await _api.deleteReseller(widget.reseller.id);
+                  if (!mounted) return;
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Reseller deleted successfully'),
+                      backgroundColor: Color(0xFFE74C3C),
+                    ),
+                  );
+                  Navigator.of(context).pop(true);
+                } catch (_) {
+                  if (!mounted) return;
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Failed to delete reseller.')),
+                  );
+                }
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFFE74C3C),
@@ -754,7 +772,7 @@ class _PageBtn extends StatelessWidget {
         child: Icon(
           icon,
           size: 22,
-          color: enabled ? Colors.grey[700] : Colors.grey[300],
+          color: Colors.grey[700],
         ),
       ),
     );

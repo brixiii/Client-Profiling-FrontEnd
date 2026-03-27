@@ -1,8 +1,11 @@
 ﻿import 'package:flutter/material.dart';
+import '../../../shared/api/backend_api.dart';
+import '../../../shared/session_flags.dart';
 import '../../../shared/widgets/app_drawer.dart';
 import '../../../shared/widgets/custom_app_bar.dart';
 import 'package:intl/intl.dart';
 import '../models/schedule_event.dart';
+import 'add_schedule_dialog.dart';
 import 'day_clients_screen.dart';
 
 class CalendarScreen extends StatefulWidget {
@@ -15,7 +18,10 @@ class CalendarScreen extends StatefulWidget {
 class _CalendarScreenState extends State<CalendarScreen>
     with SingleTickerProviderStateMixin {
   DateTime _currentMonth = DateTime(2026, 3, 1);
-  final TextEditingController _dateController = TextEditingController();
+  final TextEditingController _nameController = TextEditingController();
+  String _nameFilter = '';
+  ScheduleType? _statusFilter;
+  DateTime? _filterDate;
   DateTime? _selectedDay;
   bool _previewVisible = false;
   // Increments on each month change to trigger AnimatedSwitcher
@@ -29,46 +35,13 @@ class _CalendarScreenState extends State<CalendarScreen>
   late Animation<double> _slideAnimation;
   late Animation<double> _fadeAnimation;
 
-  // Sample events – replace with backend data when ready
+  // Backend
+  final BackendApi _api = BackendApi();
+  bool _isLoading = false;
+  String? _loadError;
+
+  // Events from backend (keyed by day-of-month)
   final Map<int, List<ScheduleEvent>> events = {
-    3: [
-      ScheduleEvent(name: 'Juan Dela Cruz', type: ScheduleType.pending),
-      ScheduleEvent(name: 'Maria Santos', type: ScheduleType.tentative),
-    ],
-    7: [
-      ScheduleEvent(name: 'Pedro Reyes', type: ScheduleType.final_),
-      ScheduleEvent(name: 'Ana Gomez', type: ScheduleType.resolved),
-      ScheduleEvent(name: 'Carlos Bautista', type: ScheduleType.pending),
-    ],
-    12: [
-      ScheduleEvent(name: 'Rosa Mendoza', type: ScheduleType.tentative),
-      ScheduleEvent(name: 'Luis Torres', type: ScheduleType.pending),
-      ScheduleEvent(name: 'Elena Ramos', type: ScheduleType.resolved),
-      ScheduleEvent(name: 'Miguel Cruz', type: ScheduleType.final_),
-    ],
-    15: [
-      ScheduleEvent(name: 'Patricia Lim', type: ScheduleType.resolved),
-    ],
-    19: [
-      ScheduleEvent(name: 'Roberto Garcia', type: ScheduleType.pending),
-      ScheduleEvent(name: 'Carmen Villanueva', type: ScheduleType.tentative),
-      ScheduleEvent(name: 'Fernando Aquino', type: ScheduleType.final_),
-    ],
-    22: [
-      ScheduleEvent(name: 'Isabella Santos', type: ScheduleType.pending),
-      ScheduleEvent(name: 'Diego Reyes', type: ScheduleType.tentative),
-    ],
-    25: [
-      ScheduleEvent(name: 'Sofia Castillo', type: ScheduleType.resolved),
-      ScheduleEvent(name: 'Andres Morales', type: ScheduleType.pending),
-      ScheduleEvent(name: 'Valentina Cruz', type: ScheduleType.final_),
-      ScheduleEvent(name: 'Lucas Martinez', type: ScheduleType.tentative),
-      ScheduleEvent(name: 'Camila Torres', type: ScheduleType.pending),
-      ScheduleEvent(name: 'Sebastian Reyes', type: ScheduleType.resolved),
-    ],
-    28: [
-      ScheduleEvent(name: 'Gabriela Santos', type: ScheduleType.tentative),
-    ],
   };
 
   @override
@@ -86,13 +59,29 @@ class _CalendarScreenState extends State<CalendarScreen>
       parent: _previewController,
       curve: Curves.easeOut,
     );
+    // Show drag-icon guide only on first visit
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _maybeShowDragGuide();
+    });
+    _loadEvents();
   }
 
   @override
   void dispose() {
     _previewController.dispose();
-    _dateController.dispose();
+    _nameController.dispose();
     super.dispose();
+  }
+
+  void _maybeShowDragGuide() {
+    if (SessionFlags.calendarDragGuideShown || !mounted) return;
+    SessionFlags.calendarDragGuideShown = true;
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      barrierColor: Colors.black54,
+      builder: (ctx) => const _DragGuideDialog(),
+    );
   }
 
   List<DateTime> _getDaysInMonth(DateTime month) {
@@ -117,24 +106,65 @@ class _CalendarScreenState extends State<CalendarScreen>
     return days;
   }
 
+  Future<void> _loadEvents() async {
+    setState(() {
+      _isLoading = true;
+      _loadError = null;
+    });
+    try {
+      final rawList = await _api.getEvents(
+        month: _currentMonth.month,
+        year: _currentMonth.year,
+      );
+      if (!mounted) return;
+      final newEvents = <int, List<ScheduleEvent>>{};
+      for (final raw in rawList) {
+        final event = ScheduleEvent.fromJson(raw);
+        final startStr = (raw['start'] ?? '').toString();
+        if (startStr.isEmpty) continue;
+        final dt = DateTime.tryParse(startStr);
+        if (dt == null) continue;
+        newEvents.putIfAbsent(dt.day, () => []).add(event);
+      }
+      setState(() {
+        events
+          ..clear()
+          ..addAll(newEvents);
+        _isLoading = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _isLoading = false;
+        _loadError = 'Failed to load schedule.';
+      });
+    }
+  }
+
   void _previousMonth() {
     setState(() {
       _currentMonth = DateTime(_currentMonth.year, _currentMonth.month - 1, 1);
       _gridKey++;
+      events.clear();
     });
+    _loadEvents();
   }
 
   void _nextMonth() {
     setState(() {
       _currentMonth = DateTime(_currentMonth.year, _currentMonth.month + 1, 1);
       _gridKey++;
+      events.clear();
     });
+    _loadEvents();
   }
 
   void _goToToday() {
     setState(() {
       _currentMonth = DateTime(DateTime.now().year, DateTime.now().month, 1);
+      events.clear();
     });
+    _loadEvents();
   }
 
   void _onDayTapped(DateTime day) {
@@ -176,7 +206,7 @@ class _CalendarScreenState extends State<CalendarScreen>
     if (_pendingDragFromDay == null) return;
     if (targetDay.month != _currentMonth.month) return;
     setState(() {
-      events[_pendingDragFromDay!]?.removeWhere((e) => e.name == client.name);
+      events[_pendingDragFromDay!]?.removeWhere((e) => e.id == client.id);
       if (events[_pendingDragFromDay!]?.isEmpty ?? false) {
         events.remove(_pendingDragFromDay!);
       }
@@ -184,6 +214,15 @@ class _CalendarScreenState extends State<CalendarScreen>
       _pendingDragClient = null;
       _pendingDragFromDay = null;
     });
+    // Persist to backend (optimistic – local state already updated)
+    if (client.id > 0) {
+      final d = targetDay;
+      final dateStr =
+          '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+      _api
+          .updateEvent(id: client.id, payload: {'start': dateStr, 'end': dateStr})
+          .catchError((_) {});
+    }
   }
 
   void _navigateToDayClients() {
@@ -241,13 +280,7 @@ class _CalendarScreenState extends State<CalendarScreen>
       appBar: CustomAppBar(
         title: 'Calendar',
         showMenuButton: true,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.today_outlined, color: Colors.black87),
-            onPressed: _goToToday,
-            tooltip: 'Go to Today',
-          ),
-        ],
+        actions: [],
       ),
       drawer: const AppDrawer(currentPage: 'Calendar'),
       body: Stack(
@@ -309,12 +342,10 @@ class _CalendarScreenState extends State<CalendarScreen>
                         spacing: isMobile ? 10 : 20,
                         runSpacing: 12,
                         children: [
-                          _buildLegendItem('PENDING', const Color(0xFF5B9BD5)),
-                          _buildLegendItem(
-                              'TENTATIVE', const Color(0xFFFFA500)),
-                          _buildLegendItem('FINAL', const Color(0xFFE74C3C)),
-                          _buildLegendItem('RESOLVED', const Color(0xFF27AE60)),
-                          _buildLegendItem('*NAME', const Color(0xFF95A5A6)),
+                          _buildLegendItem('PENDING', const Color(0xFF5B9BD5), type: ScheduleType.pending),
+                          _buildLegendItem('TENTATIVE', const Color(0xFFFFA500), type: ScheduleType.tentative),
+                          _buildLegendItem('FINAL', const Color(0xFFE74C3C), type: ScheduleType.final_),
+                          _buildLegendItem('RESOLVED', const Color(0xFF27AE60), type: ScheduleType.resolved),
                         ],
                       ),
                     ],
@@ -341,7 +372,13 @@ class _CalendarScreenState extends State<CalendarScreen>
                       ? Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            _buildDateSearchField(),
+                            Row(
+                              children: [
+                                Expanded(child: _buildNameSearchField()),
+                                const SizedBox(width: 8),
+                                _buildDatePickerIcon(),
+                              ],
+                            ),
                             const SizedBox(height: 10),
                             Row(
                               children: [
@@ -355,7 +392,9 @@ class _CalendarScreenState extends State<CalendarScreen>
                         )
                       : Row(
                           children: [
-                            Expanded(child: _buildDateSearchField()),
+                            Expanded(child: _buildNameSearchField()),
+                            const SizedBox(width: 8),
+                            _buildDatePickerIcon(),
                             const SizedBox(width: 10),
                             _buildGoButton(),
                             const SizedBox(width: 8),
@@ -399,44 +438,35 @@ class _CalendarScreenState extends State<CalendarScreen>
                           ),
                         ),
                         child: isMobile
-                            ? Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
+                            ? Row(
                                 children: [
-                                  Row(
-                                    children: [
-                                      Container(
-                                        padding: const EdgeInsets.all(8),
-                                        decoration: BoxDecoration(
-                                          color: const Color(0xFF87CEEB)
-                                              .withOpacity(0.2),
-                                          borderRadius:
-                                              BorderRadius.circular(10),
-                                        ),
-                                        child: const Icon(
-                                          Icons.calendar_month,
-                                          color: Color(0xFF87CEEB),
-                                          size: 20,
-                                        ),
-                                      ),
-                                      const SizedBox(width: 10),
-                                      Expanded(
-                                        child: Text(
-                                          monthName,
-                                          style: TextStyle(
-                                            fontSize: isNarrow ? 16 : 18,
-                                            fontWeight: FontWeight.bold,
-                                            color: Colors.black87,
-                                            letterSpacing: 0.3,
-                                          ),
-                                        ),
-                                      ),
-                                    ],
+                                  Container(
+                                    padding: const EdgeInsets.all(8),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFF87CEEB)
+                                          .withOpacity(0.2),
+                                      borderRadius:
+                                          BorderRadius.circular(10),
+                                    ),
+                                    child: const Icon(
+                                      Icons.calendar_month,
+                                      color: Color(0xFF87CEEB),
+                                      size: 20,
+                                    ),
                                   ),
-                                  const SizedBox(height: 10),
-                                  Align(
-                                    alignment: Alignment.centerRight,
-                                    child: _buildMonthNavButtons(),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: Text(
+                                      monthName,
+                                      style: TextStyle(
+                                        fontSize: isNarrow ? 16 : 18,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.black87,
+                                        letterSpacing: 0.3,
+                                      ),
+                                    ),
                                   ),
+                                  _buildMonthNavButtons(),
                                 ],
                               )
                             : Row(
@@ -509,6 +539,26 @@ class _CalendarScreenState extends State<CalendarScreen>
                         ),
                       ),
 
+                      // Loading / error banner
+                      if (_isLoading)
+                        const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 4),
+                          child: LinearProgressIndicator(
+                            color: Color(0xFF87CEEB),
+                            backgroundColor: Color(0xFFE0F7FA),
+                          ),
+                        ),
+                      if (_loadError != null)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(
+                              vertical: 8, horizontal: 12),
+                          child: Text(
+                            _loadError!,
+                            style: const TextStyle(
+                                fontSize: 12, color: Color(0xFFB91C1C)),
+                          ),
+                        ),
+
                       // Calendar grid — AnimatedSwitcher fades on month change
                       AnimatedSwitcher(
                         duration: const Duration(milliseconds: 300),
@@ -534,8 +584,16 @@ class _CalendarScreenState extends State<CalendarScreen>
                             final isToday = day.year == DateTime.now().year &&
                                 day.month == DateTime.now().month &&
                                 day.day == DateTime.now().day;
-                            final dayEvents =
+                            // Apply name filter — show only matching events
+                            final allDayEvents =
                                 isCurrentMonth ? events[day.day] ?? [] : [];
+                            final dayEvents = allDayEvents.where((e) {
+                              final matchesName = _nameFilter.isEmpty ||
+                                  e.name.toLowerCase().contains(_nameFilter.toLowerCase());
+                              final matchesStatus =
+                                  _statusFilter == null || e.type == _statusFilter;
+                              return matchesName && matchesStatus;
+                            }).toList();
 
                             final isSelected = _selectedDay != null &&
                                 _selectedDay!.day == day.day &&
@@ -738,6 +796,34 @@ class _CalendarScreenState extends State<CalendarScreen>
                           },
                         ),
                       ),
+                      if (_statusFilter != null &&
+                          !events.values.any(
+                              (list) => list.any((e) => e.type == _statusFilter)))
+                        Padding(
+                          padding: const EdgeInsets.symmetric(
+                              vertical: 28, horizontal: 16),
+                          child: Column(
+                            children: [
+                              Icon(Icons.event_busy,
+                                  size: 48, color: Colors.grey[400]),
+                              const SizedBox(height: 12),
+                              Text(
+                                'No ${_scheduleTypeLabel(_statusFilter!)} schedules found',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color: Colors.grey[600],
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                'Tap the filter again to show all schedules',
+                                style: TextStyle(
+                                    fontSize: 12, color: Colors.grey[400]),
+                              ),
+                            ],
+                          ),
+                        ),
                     ],
                   ),
                 ),
@@ -849,22 +935,56 @@ class _CalendarScreenState extends State<CalendarScreen>
           else
             ..._buildPreviewEventList(dayEvents),
           const SizedBox(height: 16),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton.icon(
-              onPressed: _navigateToDayClients,
-              icon: const Icon(Icons.people_outline, size: 18),
-              label: const Text('View All Clients'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF2563EB),
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                elevation: 0,
+          Row(
+            children: [
+              Expanded(
+                child: Builder(builder: (ctx) {
+                  final today = DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day);
+                  final isPast = _selectedDay != null && _selectedDay!.isBefore(today);
+                  return ElevatedButton.icon(
+                  onPressed: isPast ? null : () => showAddScheduleDialog(
+                    context,
+                    date: _selectedDay,
+                    onCreated: _loadEvents,
+                  ),
+                  icon: const Icon(Icons.add, size: 16),
+                  label: const Text('Schedule'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF2563EB),
+                    foregroundColor: Colors.white,
+                    disabledBackgroundColor: Colors.grey[300],
+                    disabledForegroundColor: Colors.grey[500],
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    elevation: 0,
+                    textStyle: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                );
+                }),
               ),
-            ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: _navigateToDayClients,
+                  icon: const Icon(Icons.people_outline, size: 18),
+                  label: const Text('View All Clients'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF2563EB),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    elevation: 0,
+                  ),
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -974,17 +1094,17 @@ class _CalendarScreenState extends State<CalendarScreen>
     }
   }
 
-  Widget _buildDateSearchField() {
+  Widget _buildNameSearchField() {
     return TextField(
-      controller: _dateController,
+      controller: _nameController,
       decoration: InputDecoration(
-        hintText: 'Search by date (dd/mm/yyyy)',
+        hintText: 'Search by name',
         hintStyle: TextStyle(
           color: Colors.grey[400],
           fontSize: 13,
         ),
         prefixIcon: Icon(
-          Icons.calendar_today,
+          Icons.search,
           size: 20,
           color: Colors.grey[600],
         ),
@@ -1013,9 +1133,66 @@ class _CalendarScreenState extends State<CalendarScreen>
     );
   }
 
+  Widget _buildDatePickerIcon() {
+    return GestureDetector(
+      onTap: _pickFilterDate,
+      child: Container(
+        padding: const EdgeInsets.all(11),
+        decoration: BoxDecoration(
+          color: _filterDate != null
+              ? const Color(0xFF2563EB).withOpacity(0.1)
+              : Colors.grey[50],
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: _filterDate != null
+                ? const Color(0xFF2563EB).withOpacity(0.4)
+                : Colors.transparent,
+          ),
+        ),
+        child: Icon(
+          Icons.calendar_month_outlined,
+          size: 22,
+          color: _filterDate != null
+              ? const Color(0xFF2563EB)
+              : Colors.grey[600],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _pickFilterDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _filterDate ?? DateTime.now(),
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2030),
+      builder: (ctx, child) => Theme(
+        data: Theme.of(ctx).copyWith(
+          colorScheme: const ColorScheme.light(
+            primary: Color(0xFF2563EB),
+          ),
+        ),
+        child: child!,
+      ),
+    );
+    if (picked != null && mounted) {
+      setState(() {
+        _filterDate = picked;
+        // Also navigate to the picked month and select that day
+        _currentMonth = DateTime(picked.year, picked.month, 1);
+        _gridKey++;
+        _selectedDay = picked;
+        _previewVisible = true;
+      });
+      _previewController.forward(from: 0);
+    }
+  }
+
   Widget _buildGoButton({bool compact = false}) {
     return ElevatedButton(
-      onPressed: () {},
+      onPressed: () {
+        setState(() => _nameFilter = _nameController.text.trim());
+      },
       style: ElevatedButton.styleFrom(
         backgroundColor: const Color(0xFF2563EB),
         foregroundColor: Colors.white,
@@ -1041,7 +1218,12 @@ class _CalendarScreenState extends State<CalendarScreen>
   Widget _buildClearButton({bool compact = false}) {
     return OutlinedButton(
       onPressed: () {
-        _dateController.clear();
+        _nameController.clear();
+        setState(() {
+          _nameFilter = '';
+          _filterDate = null;
+          _statusFilter = null;
+        });
       },
       style: OutlinedButton.styleFrom(
         padding: EdgeInsets.symmetric(
@@ -1271,46 +1453,230 @@ class _CalendarScreenState extends State<CalendarScreen>
     );
   }
 
-  Widget _buildLegendItem(String label, Color color) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: color.withOpacity(0.3),
-          width: 1,
+  Widget _buildScheduleButton({bool compact = false}) {
+    return ElevatedButton.icon(
+      onPressed: () => showAddScheduleDialog(
+        context,
+        date: _selectedDay ?? DateTime.now(),
+        onCreated: _loadEvents,
+      ),
+      icon: const Icon(Icons.add, size: 16),
+      label: const Text(
+        'Schedule',
+        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+      ),
+      style: ElevatedButton.styleFrom(
+        backgroundColor: const Color(0xFF2563EB),
+        foregroundColor: Colors.white,
+        padding: EdgeInsets.symmetric(
+          horizontal: compact ? 12 : 16,
+          vertical: 10,
+        ),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(10),
+        ),
+        elevation: 0,
+      ),
+    );
+  }
+
+  Widget _buildLegendItem(String label, Color color, {ScheduleType? type}) {
+    final isActive = type != null && _statusFilter == type;
+    return GestureDetector(
+      onTap: type == null
+          ? null
+          : () {
+              setState(() {
+                _statusFilter = _statusFilter == type ? null : type;
+              });
+            },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.easeInOut,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: isActive ? color.withOpacity(0.2) : color.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: isActive ? color : color.withOpacity(0.3),
+            width: isActive ? 2 : 1,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 10,
+              height: 10,
+              decoration: BoxDecoration(
+                color: color,
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: color.withOpacity(0.4),
+                    blurRadius: 4,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: isActive ? FontWeight.w700 : FontWeight.w600,
+                color: isActive ? color : Colors.grey[800],
+                letterSpacing: 0.2,
+              ),
+            ),
+          ],
         ),
       ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 10,
-            height: 10,
-            decoration: BoxDecoration(
-              color: color,
-              shape: BoxShape.circle,
-              boxShadow: [
-                BoxShadow(
-                  color: color.withOpacity(0.4),
-                  blurRadius: 4,
-                  offset: const Offset(0, 2),
+    );
+  }
+}
+
+// ── One-time drag guide dialog with fade+scale animation ─────────────────────
+
+class _DragGuideDialog extends StatefulWidget {
+  const _DragGuideDialog();
+
+  @override
+  State<_DragGuideDialog> createState() => _DragGuideDialogState();
+}
+
+class _DragGuideDialogState extends State<_DragGuideDialog>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _animCtrl;
+  late final Animation<double> _fade;
+  late final Animation<double> _scale;
+
+  @override
+  void initState() {
+    super.initState();
+    _animCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 320),
+    );
+    _fade = CurvedAnimation(parent: _animCtrl, curve: Curves.easeOut);
+    _scale = Tween<double>(begin: 0.88, end: 1.0).animate(
+      CurvedAnimation(parent: _animCtrl, curve: Curves.easeOutBack),
+    );
+    _animCtrl.forward();
+  }
+
+  @override
+  void dispose() {
+    _animCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FadeTransition(
+      opacity: _fade,
+      child: ScaleTransition(
+        scale: _scale,
+        child: Dialog(
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          backgroundColor: Colors.white,
+          insetPadding:
+              const EdgeInsets.symmetric(horizontal: 40, vertical: 24),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(24, 28, 24, 20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Icon badge
+                Container(
+                  width: 64,
+                  height: 64,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF2563EB).withOpacity(0.08),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.open_with,
+                    size: 32,
+                    color: Color(0xFF2563EB),
+                  ),
+                ),
+                const SizedBox(height: 18),
+                // Title
+                const Text(
+                  'Drag to Reschedule',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.black87,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                // Description
+                Text(
+                  'Tap the  icon on any client card to pick it up, '
+                  'then drag and drop it onto a new date in the calendar to reschedule.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: Colors.grey[600],
+                    height: 1.5,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                // Inline icon hint row
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color: Colors.grey[100],
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(color: Colors.grey[300]!),
+                      ),
+                      child: Icon(Icons.open_with,
+                          size: 16, color: Colors.grey[500]),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      '= Item is draggable',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey[500],
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+                // Got It button
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: () => Navigator.pop(context),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF2563EB),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 13),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10)),
+                      elevation: 0,
+                    ),
+                    child: const Text(
+                      'Got It',
+                      style:
+                          TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                    ),
+                  ),
                 ),
               ],
             ),
           ),
-          const SizedBox(width: 8),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
-              color: Colors.grey[800],
-              letterSpacing: 0.2,
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }

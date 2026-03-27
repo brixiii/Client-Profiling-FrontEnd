@@ -95,7 +95,7 @@ class _ServiceTypeScreenState extends State<ServiceTypeScreen> {
                   },
                   icon: const Icon(Icons.add, size: 18, color: Colors.white),
                   label: const Text(
-                    '+ Add Type',
+                    'Add Type',
                     style: TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.w600,

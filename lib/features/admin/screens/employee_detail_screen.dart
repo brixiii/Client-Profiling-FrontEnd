@@ -1,16 +1,26 @@
 ﻿import 'package:flutter/material.dart';
 import '../../../shared/widgets/custom_app_bar.dart';
+import '../../../shared/models/employee.dart';
+import '../../../shared/api/backend_api.dart';
+import '../../../shared/api/api_exception.dart';
 import 'edit_employee_screen.dart';
 
-class EmployeeDetailScreen extends StatelessWidget {
-  final Map<String, String> employee;
+class EmployeeDetailScreen extends StatefulWidget {
+  final Employee employee;
 
   const EmployeeDetailScreen({Key? key, required this.employee}) : super(key: key);
 
   @override
+  State<EmployeeDetailScreen> createState() => _EmployeeDetailScreenState();
+}
+
+class _EmployeeDetailScreenState extends State<EmployeeDetailScreen> {
+  bool _isDeleting = false;
+
+  @override
   Widget build(BuildContext context) {
-    // First word of name used as the bold heading (matching the image "Alvince")
-    final firstName = (employee['name'] ?? '').split(' ').first;
+    final employee = widget.employee;
+    final firstName = employee.name.split(' ').first;
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -28,7 +38,6 @@ class EmployeeDetailScreen extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // First name as bold heading
             Text(
               firstName,
               style: const TextStyle(
@@ -39,8 +48,8 @@ class EmployeeDetailScreen extends StatelessWidget {
             ),
             const SizedBox(height: 20),
 
-            _buildField('Name', employee['name']),
-            _buildField('Role', employee['position']),
+            _buildField('Name', employee.name),
+            _buildField('Role', employee.role),
 
             const Spacer(),
 
@@ -49,14 +58,14 @@ class EmployeeDetailScreen extends StatelessWidget {
               width: double.infinity,
               height: 50,
               child: ElevatedButton(
-                onPressed: () {
-                  Navigator.push(
+                onPressed: () async {
+                  final result = await Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (context) =>
-                          EditEmployeeScreen(employee: employee),
+                      builder: (context) => EditEmployeeScreen(employee: employee),
                     ),
                   );
+                  if (result == true && mounted) Navigator.pop(context, 'updated');
                 },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFFFFC107),
@@ -80,7 +89,7 @@ class EmployeeDetailScreen extends StatelessWidget {
               width: double.infinity,
               height: 50,
               child: ElevatedButton(
-                onPressed: () => _confirmDelete(context),
+                onPressed: _isDeleting ? null : () => _confirmDelete(context),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFFE53935),
                   foregroundColor: Colors.white,
@@ -93,7 +102,16 @@ class EmployeeDetailScreen extends StatelessWidget {
                     fontWeight: FontWeight.w600,
                   ),
                 ),
-                child: const Text('Delete'),
+                child: _isDeleting
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : const Text('Delete'),
               ),
             ),
             const SizedBox(height: 16),
@@ -135,16 +153,16 @@ class EmployeeDetailScreen extends StatelessWidget {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Delete Employee'),
-        content: Text('Are you sure you want to delete ${employee['name']}?'),
+        content: Text('Are you sure you want to delete ${widget.employee.name}?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
             child: const Text('Cancel'),
           ),
           TextButton(
-            onPressed: () {
+            onPressed: () async {
               Navigator.pop(ctx);
-              Navigator.pop(context);
+              await _deleteEmployee();
             },
             style: TextButton.styleFrom(foregroundColor: Colors.red),
             child: const Text('Delete'),
@@ -152,5 +170,26 @@ class EmployeeDetailScreen extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  Future<void> _deleteEmployee() async {
+    setState(() => _isDeleting = true);
+    try {
+      await BackendApi().deleteUser(widget.employee.id);
+      if (!mounted) return;
+      Navigator.pop(context, 'deleted');
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.message)),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Failed to delete. Please try again.')),
+      );
+    } finally {
+      if (mounted) setState(() => _isDeleting = false);
+    }
   }
 }

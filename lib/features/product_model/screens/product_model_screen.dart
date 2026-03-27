@@ -125,7 +125,7 @@ class _ProductModelScreenState extends State<ProductModelScreen> {
                   },
                   icon: const Icon(Icons.add, size: 18, color: Colors.white),
                   label: const Text(
-                    '+ Add Model',
+                    'Add Model',
                     style: TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.w600,

@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../../../shared/api/api_exception.dart';
+import '../../../shared/api/backend_api.dart';
 import '../../../shared/widgets/custom_app_bar.dart';
 import 'update_service_screen.dart';
 
@@ -12,8 +14,13 @@ class ServicesEntitiesScreen extends StatelessWidget {
     required this.shopName,
   }) : super(key: key);
 
+  int? get _serviceId => int.tryParse(service['id'] ?? '');
+
   @override
   Widget build(BuildContext context) {
+    final uploadedFile =
+        (service['image'] ?? service['uploadedPdf'] ?? '').trim();
+
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7FA),
       appBar: CustomAppBar(title: 'Direct Client', showMenuButton: false),
@@ -36,20 +43,18 @@ class ServicesEntitiesScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 20),
 
-                  _labelValue('Service Type',
-                      service['serviceType'] ?? 'Check Up'),
+                  _labelValue('Service Type', service['serviceType'] ?? '-'),
                   const SizedBox(height: 14),
 
-                  _labelValue('Service Date',
-                      service['serviceDate'] ?? 'N/A'),
+                  _labelValue('Service Date', service['serviceDate'] ?? '-'),
                   const SizedBox(height: 14),
 
-                  _labelValue('Control Number',
-                      service['controlNumber'] ?? 'N/A'),
+                  _labelValue(
+                      'Control Number', service['controlNumber'] ?? '-'),
                   const SizedBox(height: 14),
 
                   _labelValue('Serial & Spare Parts',
-                      service['serialSpareParts'] ?? 'N/A'),
+                      service['serialSpareParts'] ?? '-'),
                   const SizedBox(height: 14),
 
                   // Technicians Assigned (multi-line value)
@@ -71,8 +76,7 @@ class ServicesEntitiesScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    service['technicians'] ??
-                        'Nurwe Datu Oto, Joejet Bibbigan',
+                    service['technicians'] ?? '-',
                     style: const TextStyle(
                       fontSize: 13,
                       color: Colors.black87,
@@ -91,7 +95,7 @@ class ServicesEntitiesScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 8),
 
-                  // PDF placeholder box
+                  // PDF file status box
                   Stack(
                     children: [
                       Container(
@@ -103,7 +107,9 @@ class ServicesEntitiesScreen extends StatelessWidget {
                         ),
                         alignment: Alignment.center,
                         child: Text(
-                          'Example this is a PDF',
+                          uploadedFile.isEmpty
+                              ? 'No uploaded file'
+                              : uploadedFile,
                           style: TextStyle(
                             fontSize: 13,
                             color: Colors.grey[600],
@@ -196,8 +202,35 @@ class ServicesEntitiesScreen extends StatelessWidget {
                         ),
                       );
                       if (confirmed == true) {
-                        // TODO: implement delete
-                        Navigator.pop(context);
+                        if (_serviceId == null) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                                content: Text('Missing service id.')),
+                          );
+                          return;
+                        }
+
+                        final api = BackendApi();
+                        try {
+                          await api.deleteAvailedService(_serviceId!);
+                          if (!context.mounted) return;
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                                content: Text('Service deleted successfully.')),
+                          );
+                          Navigator.pop(context);
+                        } on ApiException catch (e) {
+                          if (!context.mounted) return;
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text(e.message)),
+                          );
+                        } catch (_) {
+                          if (!context.mounted) return;
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                                content: Text('Failed to delete service.')),
+                          );
+                        }
                       }
                     },
                     style: ElevatedButton.styleFrom(
