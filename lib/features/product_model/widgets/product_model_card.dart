@@ -50,7 +50,7 @@ class ProductModelCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  item.name,
+                  item.modelname,
                   style: const TextStyle(
                     fontSize: 15,
                     fontWeight: FontWeight.w600,
@@ -59,13 +59,8 @@ class ProductModelCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  '${item.brand} · ${item.category}',
+                  '${item.status} · ${item.applianceType}',
                   style: const TextStyle(fontSize: 13, color: Colors.black54),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  item.description,
-                  style: const TextStyle(fontSize: 12, color: Colors.black45),
                 ),
               ],
             ),

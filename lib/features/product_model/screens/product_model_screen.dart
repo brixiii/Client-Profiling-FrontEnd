@@ -1,5 +1,7 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import '../models/product_model.dart';
+import '../../../shared/api/api_exception.dart';
+import '../../../shared/api/backend_api.dart';
 import '../../../shared/widgets/app_drawer.dart';
 import '../../../shared/widgets/custom_app_bar.dart';
 import 'add_product_model_screen.dart';
@@ -13,65 +15,29 @@ class ProductModelScreen extends StatefulWidget {
 }
 
 class _ProductModelScreenState extends State<ProductModelScreen> {
+  final _api = BackendApi();
   final TextEditingController _searchController = TextEditingController();
+
   String _searchQuery = '';
   int _currentPage = 1;
-  final int _itemsPerPage = 5;
+  static const int _itemsPerPage = 5;
 
-  final List<ProductModel> _items = const [
-    ProductModel(
-      id: '1',
-      name: 'LG Giant C Max\nWasher (CWG)',
-      brand: 'LG',
-      category: 'Washer',
-      description: 'Giant C Max series',
-      modelCode: 'CWG27MDCRB',
-      washerCode: 'CWG327MDCRB',
-    ),
-    ProductModel(
-      id: '2',
-      name: 'LG Giant C Max\nDryer (CDG)',
-      brand: 'LG',
-      category: 'Dryer',
-      description: 'Giant C Max series',
-      modelCode: 'CDG',
-      dryerCode: 'CDG327MDCRB',
-    ),
-    ProductModel(
-      id: '3',
-      name: 'LG Titan C Max\nWasher (CWT)',
-      brand: 'LG',
-      category: 'Washer',
-      description: 'Titan C Max series',
-      modelCode: 'CWT',
-      washerCode: 'CWT327MDCRB',
-    ),
-    ProductModel(
-      id: '4',
-      name: 'LG Titan C Max\nDryer (CDT)',
-      brand: 'LG',
-      category: 'Dryer',
-      description: 'Titan C Max series',
-      modelCode: 'CDT',
-      dryerCode: 'CDT327MDCRB',
-    ),
-  ];
+  // Backend response state
+  List<ProductModel> _allItems = [];
+  bool _isLoading = true;
+  String? _error;
+  int _lastPage = 1;
+  int _total = 0;
 
-  List<ProductModel> get _filtered => _items
-      .where((e) =>
-          e.name.toLowerCase().contains(_searchQuery.toLowerCase()) ||
-          e.modelCode.toLowerCase().contains(_searchQuery.toLowerCase()))
-      .toList();
+  int _spAvailable = 0;
+  bool _spLoading = true;
 
-  List<ProductModel> get _pageItems {
-    final start = (_currentPage - 1) * _itemsPerPage;
-    final end = (start + _itemsPerPage).clamp(0, _filtered.length);
-    if (start >= _filtered.length) return [];
-    return _filtered.sublist(start, end);
+  @override
+  void initState() {
+    super.initState();
+    _loadPage();
+    _loadSparePartsStats();
   }
-
-  int get _totalPages =>
-      (_filtered.length / _itemsPerPage).ceil().clamp(1, double.maxFinite).toInt();
 
   @override
   void dispose() {
@@ -79,8 +45,55 @@ class _ProductModelScreenState extends State<ProductModelScreen> {
     super.dispose();
   }
 
+  Future<void> _loadPage() async {
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+    try {
+      final resp = await _api.getProductModels(
+          page: _currentPage, perPage: _itemsPerPage);
+      if (mounted) {
+        setState(() {
+          _allItems = resp.data;
+          _lastPage = resp.lastPage;
+          _total = resp.total;
+          _isLoading = false;
+        });
+      }
+    } on ApiException catch (e) {
+      if (mounted) setState(() { _error = e.message; _isLoading = false; });
+    } catch (e) {
+      if (mounted) setState(() { _error = e.toString(); _isLoading = false; });
+    }
+  }
+
+  Future<void> _loadSparePartsStats() async {
+    try {
+      final resp = await _api.getSpareParts(page: 1, perPage: 1);
+      if (mounted) {
+        setState(() {
+          _spAvailable = resp.total;
+          _spLoading = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _spLoading = false);
+    }
+  }
+
+  // Local search filter on the current page's items
+  List<ProductModel> get _filtered => _allItems.where((e) {
+        final q = _searchQuery.toLowerCase();
+        return e.modelname.toLowerCase().contains(q) ||
+            e.status.toLowerCase().contains(q) ||
+            e.applianceType.toLowerCase().contains(q) ||
+            e.modelCode.toLowerCase().contains(q);
+      }).toList();
+
   @override
   Widget build(BuildContext context) {
+    final filtered = _filtered;
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: CustomAppBar(title: 'Inventory', showMenuButton: true),
@@ -90,19 +103,22 @@ class _ProductModelScreenState extends State<ProductModelScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // ── Stat cards ───────────────────────────────────────────
+            // ── Stat cards ────────────────────────────────────────────
             Row(
               children: [
-                Expanded(child: _StatCard(label: 'Spare Parts\nUsed', value: '0')),
+                Expanded(
+                    child: _StatCard(label: 'Spare Parts\nUsed', value: '0')),
                 const SizedBox(width: 12),
                 Expanded(
-                  child: _StatCard(label: 'Available\nSpare Parts', value: '1257'),
+                  child: _StatCard(
+                      label: 'Available\nSpare Parts',
+                      value: _spLoading ? '...' : '$_spAvailable'),
                 ),
               ],
             ),
             const SizedBox(height: 28),
 
-            // ── Section heading + Add button ─────────────────────────
+            // â”€â”€ Section heading + Add button â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               crossAxisAlignment: CrossAxisAlignment.center,
@@ -110,43 +126,38 @@ class _ProductModelScreenState extends State<ProductModelScreen> {
                 const Text(
                   'Product Model',
                   style: TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.w700,
-                    color: Colors.black87,
-                  ),
+                      fontSize: 22,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.black87),
                 ),
                 ElevatedButton.icon(
-                  onPressed: () {
-                    Navigator.of(context).push(
+                  onPressed: () async {
+                    final added = await Navigator.of(context).push<bool>(
                       MaterialPageRoute(
-                        builder: (_) => const AddProductModelScreen(),
-                      ),
+                          builder: (_) => const AddProductModelScreen()),
                     );
+                    if (added == true) _loadPage();
                   },
                   icon: const Icon(Icons.add, size: 18, color: Colors.white),
-                  label: const Text(
-                    'Add Model',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w600,
-                      fontSize: 13,
-                    ),
-                  ),
+                  label: const Text('Add Model',
+                      style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 13)),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFFF5A623),
                     elevation: 0,
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 14, vertical: 10),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
+                        borderRadius: BorderRadius.circular(8)),
                   ),
                 ),
               ],
             ),
             const SizedBox(height: 12),
 
-            // ── Search field ─────────────────────────────────────────
+            // â”€â”€ Search field â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
             SizedBox(
               width: 160,
               height: 36,
@@ -157,39 +168,30 @@ class _ProductModelScreenState extends State<ProductModelScreen> {
                   hintText: 'Search',
                   hintStyle:
                       const TextStyle(fontSize: 13, color: Colors.black38),
-                  contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 10, vertical: 8),
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                   filled: true,
                   fillColor: Colors.white,
                   border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(4),
-                    borderSide:
-                        const BorderSide(color: Color(0xFFBBBBBB)),
-                  ),
+                      borderRadius: BorderRadius.circular(4),
+                      borderSide: const BorderSide(color: Color(0xFFBBBBBB))),
                   enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(4),
-                    borderSide:
-                        const BorderSide(color: Color(0xFFBBBBBB)),
-                  ),
+                      borderRadius: BorderRadius.circular(4),
+                      borderSide: const BorderSide(color: Color(0xFFBBBBBB))),
                   focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(4),
-                    borderSide: const BorderSide(
-                        color: Color(0xFF2563EB), width: 1.5),
-                  ),
+                      borderRadius: BorderRadius.circular(4),
+                      borderSide: const BorderSide(
+                          color: Color(0xFF2563EB), width: 1.5)),
                 ),
-                onChanged: (v) => setState(() {
-                  _searchQuery = v;
-                  _currentPage = 1;
-                }),
+                onChanged: (v) => setState(() => _searchQuery = v),
               ),
             ),
             const SizedBox(height: 12),
 
-            // ── Table ────────────────────────────────────────────────
+            // â”€â”€ Table â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
             Container(
               decoration: BoxDecoration(
-                border:
-                    Border.all(color: const Color(0xFFCCCCCC), width: 1),
+                border: Border.all(color: const Color(0xFFCCCCCC), width: 1),
                 borderRadius: BorderRadius.circular(4),
               ),
               child: Column(
@@ -209,53 +211,46 @@ class _ProductModelScreenState extends State<ProductModelScreen> {
                             child: Padding(
                               padding: const EdgeInsets.symmetric(
                                   vertical: 12, horizontal: 8),
-                              child: Text(
-                                'Model Name',
-                                textAlign: TextAlign.center,
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 13,
-                                  color: Colors.black87,
-                                ),
-                              ),
+                              child: const Text('Model Name',
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 13,
+                                      color: Colors.black87)),
                             ),
                           ),
                           const VerticalDivider(
-                              width: 1, thickness: 1,
+                              width: 1,
+                              thickness: 1,
                               color: Color(0xFFCCCCCC)),
                           Expanded(
                             flex: 4,
                             child: Padding(
                               padding: const EdgeInsets.symmetric(
                                   vertical: 12, horizontal: 8),
-                              child: Text(
-                                'Model Code',
-                                textAlign: TextAlign.center,
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 13,
-                                  color: Colors.black87,
-                                ),
-                              ),
+                              child: const Text('Model Code',
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 13,
+                                      color: Colors.black87)),
                             ),
                           ),
                           const VerticalDivider(
-                              width: 1, thickness: 1,
+                              width: 1,
+                              thickness: 1,
                               color: Color(0xFFCCCCCC)),
                           const SizedBox(
                             width: 80,
                             child: Padding(
                               padding: EdgeInsets.symmetric(
                                   vertical: 12, horizontal: 8),
-                              child: Text(
-                                'Actions',
-                                textAlign: TextAlign.center,
-                                style: TextStyle(
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 13,
-                                  color: Colors.black87,
-                                ),
-                              ),
+                              child: Text('Actions',
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 13,
+                                      color: Colors.black87)),
                             ),
                           ),
                         ],
@@ -265,8 +260,28 @@ class _ProductModelScreenState extends State<ProductModelScreen> {
                   const Divider(
                       height: 1, thickness: 1, color: Color(0xFFCCCCCC)),
 
-                  // Data rows
-                  if (_pageItems.isEmpty)
+                  // Loading / error / empty / data rows
+                  if (_isLoading)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 28),
+                      child: Center(child: CircularProgressIndicator()),
+                    )
+                  else if (_error != null)
+                    Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        children: [
+                          Text(_error!,
+                              style: const TextStyle(
+                                  color: Colors.red, fontSize: 13)),
+                          const SizedBox(height: 8),
+                          TextButton(
+                              onPressed: _loadPage,
+                              child: const Text('Retry')),
+                        ],
+                      ),
+                    )
+                  else if (filtered.isEmpty)
                     const Padding(
                       padding: EdgeInsets.symmetric(vertical: 24),
                       child: Center(
@@ -276,97 +291,95 @@ class _ProductModelScreenState extends State<ProductModelScreen> {
                       ),
                     )
                   else
-                    ...List.generate(_pageItems.length, (index) {
-                      final item = _pageItems[index];
-                      final isLast = index == _pageItems.length - 1;
+                    ...List.generate(filtered.length, (index) {
+                      final item = filtered[index];
+                      final isLast = index == filtered.length - 1;
                       return Column(
                         children: [
                           IntrinsicHeight(
                             child: Row(
                               children: [
-                                  Expanded(
-                                    flex: 5,
-                                    child: Padding(
-                                      padding: const EdgeInsets.symmetric(
-                                          vertical: 14, horizontal: 8),
-                                      child: Text(
-                                        item.name,
+                                Expanded(
+                                  flex: 5,
+                                  child: Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                        vertical: 14, horizontal: 8),
+                                    child: Text(item.modelname,
                                         textAlign: TextAlign.center,
                                         style: const TextStyle(
-                                          fontSize: 13,
-                                          color: Colors.black87,
-                                        ),
-                                      ),
-                                    ),
+                                            fontSize: 13,
+                                            color: Colors.black87)),
                                   ),
-                                  const VerticalDivider(
-                                      width: 1,
-                                      thickness: 1,
-                                      color: Color(0xFFCCCCCC)),
-                                  Expanded(
-                                    flex: 4,
-                                    child: Padding(
-                                      padding: const EdgeInsets.symmetric(
-                                          vertical: 14, horizontal: 8),
-                                      child: Text(
-                                        item.modelCode,
+                                ),
+                                const VerticalDivider(
+                                    width: 1,
+                                    thickness: 1,
+                                    color: Color(0xFFCCCCCC)),
+                                Expanded(
+                                  flex: 4,
+                                  child: Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                        vertical: 14, horizontal: 8),
+                                    child: Text(
+                                        item.modelCode.isNotEmpty
+                                            ? item.modelCode
+                                            : '—',
                                         textAlign: TextAlign.center,
                                         style: const TextStyle(
-                                          fontSize: 13,
-                                          color: Colors.black87,
-                                        ),
-                                      ),
-                                    ),
+                                            fontSize: 13,
+                                            color: Colors.black87)),
                                   ),
-                                  const VerticalDivider(
-                                      width: 1,
-                                      thickness: 1,
-                                      color: Color(0xFFCCCCCC)),
-                                  SizedBox(
-                                    width: 80,
-                                    child: Center(
-                                      child: OutlinedButton(
-                                        onPressed: () {
-                                          Navigator.of(context).push(
-                                            MaterialPageRoute(
-                                              builder: (_) =>
-                                                  ProductModelDetailScreen(
-                                                      item: item),
-                                            ),
-                                          );
-                                        },
-                                        style: OutlinedButton.styleFrom(
-                                          padding: const EdgeInsets.symmetric(
-                                              horizontal: 6, vertical: 4),
-                                          side: const BorderSide(
+                                ),
+                                const VerticalDivider(
+                                    width: 1,
+                                    thickness: 1,
+                                    color: Color(0xFFCCCCCC)),
+                                SizedBox(
+                                  width: 80,
+                                  child: Center(
+                                    child: OutlinedButton(
+                                      onPressed: () async {
+                                        final changed =
+                                            await Navigator.of(context)
+                                                .push<bool>(MaterialPageRoute(
+                                          builder: (_) =>
+                                              ProductModelDetailScreen(
+                                                  item: item),
+                                        ));
+                                        if (changed == true) _loadPage();
+                                      },
+                                      style: OutlinedButton.styleFrom(
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 6, vertical: 4),
+                                        side: const BorderSide(
+                                            color: Color(0xFF2563EB)),
+                                        shape: RoundedRectangleBorder(
+                                            borderRadius:
+                                                BorderRadius.circular(4)),
+                                      ),
+                                      child: Row(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.center,
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: const [
+                                          Icon(Icons.visibility_outlined,
+                                              size: 13,
                                               color: Color(0xFF2563EB)),
-                                          shape: RoundedRectangleBorder(
-                                              borderRadius:
-                                                  BorderRadius.circular(4)),
-                                        ),
-                                        child: Row(
-                                          mainAxisAlignment:
-                                              MainAxisAlignment.center,
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: const [
-                                            Icon(Icons.visibility_outlined,
-                                                size: 13,
-                                                color: Color(0xFF2563EB)),
-                                            SizedBox(width: 3),
-                                            Text('View',
-                                                style: TextStyle(
-                                                    fontSize: 11,
-                                                    color: Color(0xFF2563EB),
-                                                    fontWeight:
-                                                        FontWeight.w600)),
-                                          ],
-                                        ),
+                                          SizedBox(width: 3),
+                                          Text('View',
+                                              style: TextStyle(
+                                                  fontSize: 11,
+                                                  color: Color(0xFF2563EB),
+                                                  fontWeight:
+                                                      FontWeight.w600)),
+                                        ],
                                       ),
                                     ),
                                   ),
-                                ],
-                              ),
+                                ),
+                              ],
                             ),
+                          ),
                           if (!isLast)
                             const Divider(
                                 height: 1,
@@ -380,61 +393,67 @@ class _ProductModelScreenState extends State<ProductModelScreen> {
             ),
             const SizedBox(height: 10),
 
-            // ── Pagination footer ────────────────────────────────────
+            // â”€â”€ Pagination footer â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  _filtered.isEmpty
+                  _total == 0
                       ? 'Showing 0 entries'
-                      : 'Showing ${(_currentPage - 1) * _itemsPerPage + 1} to '
-                          '${((_currentPage * _itemsPerPage).clamp(1, _filtered.length))} '
-                          'of ${_filtered.length} entries',
-                  style: const TextStyle(
-                      fontSize: 11, color: Colors.black45),
+                      : 'Showing ${(_currentPage - 1) * _itemsPerPage + 1}'
+                          '\u2013${(_currentPage - 1) * _itemsPerPage + filtered.length}'
+                          ' of $_total entries',
+                  style:
+                      const TextStyle(fontSize: 11, color: Colors.black45),
                 ),
                 Row(
                   children: [
                     _PageButton(
                       icon: Icons.first_page,
                       onTap: _currentPage > 1
-                          ? () => setState(() => _currentPage = 1)
+                          ? () {
+                              setState(() => _currentPage = 1);
+                              _loadPage();
+                            }
                           : null,
                     ),
                     _PageButton(
                       icon: Icons.chevron_left,
                       onTap: _currentPage > 1
-                          ? () =>
-                              setState(() => _currentPage -= 1)
+                          ? () {
+                              setState(() => _currentPage--);
+                              _loadPage();
+                            }
                           : null,
                     ),
                     Container(
                       padding: const EdgeInsets.symmetric(
                           horizontal: 10, vertical: 4),
                       decoration: BoxDecoration(
-                        border: Border.all(
-                            color: const Color(0xFFCCCCCC)),
+                        border:
+                            Border.all(color: const Color(0xFFCCCCCC)),
                         borderRadius: BorderRadius.circular(4),
                       ),
-                      child: Text(
-                        '$_currentPage',
-                        style: const TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600),
-                      ),
+                      child: Text('$_currentPage',
+                          style: const TextStyle(
+                              fontSize: 12, fontWeight: FontWeight.w600)),
                     ),
                     _PageButton(
                       icon: Icons.chevron_right,
-                      onTap: _currentPage < _totalPages
-                          ? () =>
-                              setState(() => _currentPage += 1)
+                      onTap: _currentPage < _lastPage
+                          ? () {
+                              setState(() => _currentPage++);
+                              _loadPage();
+                            }
                           : null,
                     ),
                     _PageButton(
                       icon: Icons.last_page,
-                      onTap: _currentPage < _totalPages
-                          ? () =>
-                              setState(() => _currentPage = _totalPages)
+                      onTap: _currentPage < _lastPage
+                          ? () {
+                              setState(() => _currentPage = _lastPage);
+                              _loadPage();
+                            }
                           : null,
                     ),
                   ],
@@ -447,8 +466,7 @@ class _ProductModelScreenState extends State<ProductModelScreen> {
     );
   }
 }
-
-// ── Stat card ─────────────────────────────────────────────────────────────
+// â”€â”€ Stat card â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class _StatCard extends StatelessWidget {
   final String label;
@@ -491,7 +509,7 @@ class _StatCard extends StatelessWidget {
   }
 }
 
-// ── Pagination button ─────────────────────────────────────────────────────
+// â”€â”€ Pagination button â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class _PageButton extends StatelessWidget {
   final IconData icon;

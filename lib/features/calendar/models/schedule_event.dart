@@ -45,6 +45,10 @@ class ScheduleEvent {
     this.createdBy = '',
   }) : technicians = technicians ?? ['N/A', 'N/A', 'N/A', 'N/A', 'N/A'];
 
+  /// Shows "* Name" when marked as Asterisk, plain name otherwise.
+  String get displayName =>
+      nameType == NameType.asterisk ? '* $name' : name;
+
   factory ScheduleEvent.fromJson(Map<String, dynamic> json) {
     final rawTechs = (json['technicians'] as List? ?? []);
     final techs = rawTechs

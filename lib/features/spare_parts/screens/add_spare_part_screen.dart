@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
-import '../models/spare_part_model.dart';
+import 'package:intl/intl.dart';
+import '../../../shared/api/api_exception.dart';
+import '../../../shared/api/backend_api.dart';
 import '../../../shared/widgets/custom_app_bar.dart';
 
 /// Add a new Spare Part.
@@ -12,6 +14,7 @@ class AddSparePartScreen extends StatefulWidget {
 }
 
 class _AddSparePartScreenState extends State<AddSparePartScreen> {
+  final _api = BackendApi();
   final _formKey = GlobalKey<FormState>();
 
   final _nameController = TextEditingController();
@@ -19,6 +22,9 @@ class _AddSparePartScreenState extends State<AddSparePartScreen> {
   final _dateController = TextEditingController();
   final _notesController = TextEditingController();
   int _quantity = 0;
+
+  Map<String, String> _fieldErrors = {};
+  bool _submitting = false;
 
   @override
   void dispose() {
@@ -37,26 +43,44 @@ class _AddSparePartScreenState extends State<AddSparePartScreen> {
       lastDate: DateTime(2030),
     );
     if (picked != null) {
-      _dateController.text =
-          '${picked.month.toString().padLeft(2, '0')}/${picked.day.toString().padLeft(2, '0')}/${picked.year}';
+      setState(() {
+        _dateController.text = DateFormat('yyyy-MM-dd').format(picked);
+        _fieldErrors.remove('date');
+      });
     }
   }
 
-  void _submit() {
+  Future<void> _submit() async {
+    setState(() => _fieldErrors = {});
     if (!(_formKey.currentState?.validate() ?? false)) return;
 
-    final newItem = SparePartModel(
-      id: DateTime.now().millisecondsSinceEpoch.toString(),
-      name: _nameController.text.trim(),
-      partNumber: _partNumberController.text.trim(),
-      stock: _quantity,
-      unit: 'pcs',
-      quantity: _quantity,
-      date: _dateController.text.trim(),
-      notes: _notesController.text.trim(),
-    );
-
-    Navigator.of(context).pop(newItem);
+    setState(() => _submitting = true);
+    try {
+      await _api.createSparePart({
+        'sparepartsname': _nameController.text.trim(),
+        'partnumber': _partNumberController.text.trim(),
+        'spquantity': _quantity,
+        'date': _dateController.text.trim(),
+        'spnotes': _notesController.text.trim(),
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Spare part added successfully.')));
+        Navigator.of(context).pop(true);
+      }
+    } on ApiException catch (e) {
+      if (mounted) {
+        if (e.statusCode == 422 && e.fieldErrors.isNotEmpty) {
+          setState(() => _fieldErrors = Map<String, String>.from(e.fieldErrors));
+          _formKey.currentState?.validate();
+        } else {
+          ScaffoldMessenger.of(context)
+              .showSnackBar(SnackBar(content: Text(e.message)));
+        }
+      }
+    } finally {
+      if (mounted) setState(() => _submitting = false);
+    }
   }
 
   @override
@@ -98,8 +122,14 @@ class _AddSparePartScreenState extends State<AddSparePartScreen> {
                       _buildTextField(
                         controller: _nameController,
                         hint: 'Enter Part Name',
-                        validator: (v) =>
-                            (v?.isEmpty ?? true) ? 'Required' : null,
+                        fieldKey: 'sparepartsname',
+                        validator: (v) {
+                          if (v == null || v.trim().isEmpty) return 'Required';
+                          if (_fieldErrors.containsKey('sparepartsname')) {
+                            return _fieldErrors['sparepartsname'];
+                          }
+                          return null;
+                        },
                       ),
                       const SizedBox(height: 16),
 
@@ -107,6 +137,7 @@ class _AddSparePartScreenState extends State<AddSparePartScreen> {
                       _buildTextField(
                         controller: _partNumberController,
                         hint: 'Enter Part Number',
+                        fieldKey: 'partnumber',
                       ),
                       const SizedBox(height: 16),
 
@@ -122,6 +153,7 @@ class _AddSparePartScreenState extends State<AddSparePartScreen> {
                       _buildTextField(
                         controller: _notesController,
                         hint: 'Notes',
+                        fieldKey: 'spnotes',
                         maxLines: 3,
                       ),
                     ],
@@ -133,7 +165,7 @@ class _AddSparePartScreenState extends State<AddSparePartScreen> {
                   width: double.infinity,
                   height: 50,
                   child: ElevatedButton(
-                    onPressed: _submit,
+                    onPressed: _submitting ? null : _submit,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFFF5A623),
                       foregroundColor: Colors.white,
@@ -141,9 +173,15 @@ class _AddSparePartScreenState extends State<AddSparePartScreen> {
                       shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(10)),
                     ),
-                    child: const Text('Submit',
-                        style: TextStyle(
-                            fontSize: 16, fontWeight: FontWeight.w600)),
+                    child: _submitting
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                                strokeWidth: 2, color: Colors.white))
+                        : const Text('Submit',
+                            style: TextStyle(
+                                fontSize: 16, fontWeight: FontWeight.w600)),
                   ),
                 ),
                 const SizedBox(height: 20),
@@ -158,6 +196,7 @@ class _AddSparePartScreenState extends State<AddSparePartScreen> {
   Widget _buildTextField({
     required TextEditingController controller,
     required String hint,
+    required String fieldKey,
     String? Function(String?)? validator,
     int maxLines = 1,
   }) {
@@ -165,6 +204,11 @@ class _AddSparePartScreenState extends State<AddSparePartScreen> {
       controller: controller,
       validator: validator,
       maxLines: maxLines,
+      onChanged: (_) {
+        if (_fieldErrors.containsKey(fieldKey)) {
+          setState(() => _fieldErrors.remove(fieldKey));
+        }
+      },
       decoration: _inputDecoration(hint),
     );
   }
@@ -223,7 +267,12 @@ class _AddSparePartScreenState extends State<AddSparePartScreen> {
       controller: _dateController,
       readOnly: true,
       onTap: _pickDate,
-      decoration: _inputDecoration('mm/dd/yyyy').copyWith(
+      validator: (v) {
+        if (v == null || v.trim().isEmpty) return 'Required';
+        if (_fieldErrors.containsKey('date')) return _fieldErrors['date'];
+        return null;
+      },
+      decoration: _inputDecoration('YYYY-MM-DD').copyWith(
         suffixIcon: const Icon(Icons.calendar_today_outlined,
             size: 18, color: Colors.black45),
       ),
@@ -268,5 +317,16 @@ InputDecoration _inputDecoration(String hint) {
       borderSide:
           const BorderSide(color: Color(0xFF2563EB), width: 1.5),
     ),
+    errorBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(8),
+      borderSide: const BorderSide(color: Color(0xFFEF5350)),
+    ),
+    focusedErrorBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(8),
+      borderSide: const BorderSide(color: Color(0xFFEF5350), width: 1.5),
+    ),
   );
 }
+
+/// Add a new Spare Part.
+/// Reached from "+ Add Parts" in SparePartsScreen.

@@ -413,10 +413,11 @@ class _AddProductScreenState extends State<AddProductScreen> {
         'notes': _notesController.text.trim().isEmpty
             ? null : _notesController.text.trim(),
       });
-      // Post each serial number separately
+      // Post each serial number separately — deduplicated
       final validSerials = _serialControllers
           .map((c) => c.text.trim())
           .where((s) => s.isNotEmpty)
+          .toSet()
           .toList();
       for (final serial in validSerials) {
         await _api.createResellerProductSerial(
@@ -514,6 +515,25 @@ class _AddProductScreenState extends State<AddProductScreen> {
             _buildTextField(_drController,
                 hint: 'Delivery Receipt (Optional)'),
             const SizedBox(height: 12),
+            Row(
+              children: [
+                const Expanded(
+                  child: Text(
+                    'Serial/Unit Numbers',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w500,
+                      color: Colors.black87,
+                    ),
+                  ),
+                ),
+                _buildIconButton(Icons.add, () {
+                  setState(() =>
+                      _serialControllers.add(TextEditingController()));
+                }),
+              ],
+            ),
+            const SizedBox(height: 8),
             ...List.generate(_serialControllers.length, (i) {
               return Padding(
                 padding: const EdgeInsets.only(bottom: 8),
@@ -523,12 +543,11 @@ class _AddProductScreenState extends State<AddProductScreen> {
                       child: _buildTextField(_serialControllers[i],
                           hint: 'Serial/Unit Number'),
                     ),
-                    if (i == _serialControllers.length - 1) ...[
+                    if (_serialControllers.length > 1) ...[
                       const SizedBox(width: 8),
-                      _buildIconButton(Icons.add, () {
-                        setState(() {
-                          _serialControllers.add(TextEditingController());
-                        });
+                      _buildRedRemoveButton(() {
+                        _serialControllers[i].dispose();
+                        setState(() => _serialControllers.removeAt(i));
                       }),
                     ],
                   ],
@@ -775,6 +794,23 @@ class _AddProductScreenState extends State<AddProductScreen> {
                 size: 18, color: Colors.grey[500]),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildRedRemoveButton(VoidCallback onTap) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        height: 48,
+        width: 48,
+        decoration: BoxDecoration(
+          color: const Color(0xFFEF4444).withOpacity(0.1),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: const Color(0xFFEF4444).withOpacity(0.4)),
+        ),
+        child: const Icon(Icons.close, size: 18, color: Color(0xFFEF4444)),
       ),
     );
   }

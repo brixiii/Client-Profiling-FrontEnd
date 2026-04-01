@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../../features/serial_number/models/serial_number_model.dart';
@@ -28,30 +30,237 @@ class _ProductDetailsEntitiesScreenState
   bool _isLoading = false;
   String? _errorText;
 
-  List<String> _serialNumbers = const [];
+  List<SerialNumberModel> _serialNumbers = const [];
+  bool _isLoadingSerials = false;
+  String? _serialError;
+  int _serialPage = 1;
+  int _serialLastPage = 1;
+  int _serialTotal = 0;
+  static const int _serialPerPage = 10;
+  int _serialRequestSeq = 0;
+  Timer? _serialDebounce;
 
-  int? get _productId => int.tryParse(widget.product['id'] ?? '');
+  int? get _productId => int.tryParse(widget.product['id'] ?? '');  
+  int? get _shopProductId =>
+      int.tryParse(widget.product['shop_product_id'] ?? '');
+  int? get _clientId => int.tryParse(widget.product['client_id'] ?? '');
 
   @override
   void initState() {
     super.initState();
-    _seedSerialNumbers();
     _loadProduct();
+    _fetchSerialNumbers();
   }
 
   @override
   void dispose() {
+    _serialDebounce?.cancel();
     _searchController.dispose();
     super.dispose();
   }
 
-  void _seedSerialNumbers() {
-    final raw =
-        widget.product['serialNumbers'] ?? widget.product['serialNumber'] ?? '';
-    final seeded =
-        raw.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
+  Future<void> _fetchSerialNumbers() async {
+    final spId = _shopProductId;
+    if (spId == null) return;
 
-    _serialNumbers = seeded;
+    final requestId = ++_serialRequestSeq;
+    setState(() {
+      _isLoadingSerials = true;
+      _serialError = null;
+    });
+
+    try {
+      final q = _searchController.text.trim();
+      final resp = await _api.getSerialNumbers(
+        page: _serialPage,
+        perPage: _serialPerPage,
+        q: q.isEmpty ? null : q,
+        shopProductId: spId,
+      );
+      if (!mounted || requestId != _serialRequestSeq) return;
+
+      final safeLastPage = resp.lastPage <= 0 ? 1 : resp.lastPage;
+      final safePage =
+          _serialPage > safeLastPage ? safeLastPage : _serialPage;
+      // Enforce client-side filter in case backend ignores the param.
+      final items =
+          resp.data.where((m) => m.shopProductId == spId).toList();
+      setState(() {
+        _serialNumbers = items;
+        _serialPage = safePage;
+        _serialLastPage = safeLastPage;
+        _serialTotal = resp.total > 0 ? resp.total : items.length;
+      });
+    } on ApiException catch (e) {
+      if (!mounted || requestId != _serialRequestSeq) return;
+      setState(() => _serialError = e.message);
+    } catch (_) {
+      if (!mounted || requestId != _serialRequestSeq) return;
+      setState(() => _serialError = 'Failed to load serial numbers.');
+    } finally {
+      if (mounted && requestId == _serialRequestSeq) {
+        setState(() => _isLoadingSerials = false);
+      }
+    }
+  }
+
+  void _onSerialSearchChanged(String _) {
+    _serialDebounce?.cancel();
+    _serialDebounce = Timer(const Duration(milliseconds: 400), () {
+      if (!mounted) return;
+      setState(() => _serialPage = 1);
+      _fetchSerialNumbers();
+    });
+  }
+
+  void _showEditSerialDialog(SerialNumberModel sn) {
+    final snCtrl = TextEditingController(text: sn.serialnumber);
+    final stCtrl = TextEditingController(text: sn.supplierType);
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        var isSubmitting = false;
+        return StatefulBuilder(
+          builder: (ctx, setS) => AlertDialog(
+            title: const Text('Edit Serial Number'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: snCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'Serial Number *',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: stCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'Supplier Type',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: isSubmitting ? null : () => Navigator.pop(ctx),
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton(
+                onPressed: isSubmitting
+                    ? null
+                    : () async {
+                        final newSn = snCtrl.text.trim();
+                        if (newSn.isEmpty) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                                content:
+                                    Text('Serial number is required.')),
+                          );
+                          return;
+                        }
+                        setS(() => isSubmitting = true);
+                        try {
+                          final payload = <String, dynamic>{};
+                          if (newSn != sn.serialnumber) {
+                            payload['serialnumber'] = newSn;
+                          }
+                          final newSt = stCtrl.text.trim();
+                          if (newSt != sn.supplierType) {
+                            payload['supplier_type'] = newSt;
+                          }
+                          if (payload.isNotEmpty) {
+                            await _api.updateSerialNumber(sn.id, payload);
+                          }
+                          if (!mounted) return;
+                          Navigator.pop(ctx);
+                          _fetchSerialNumbers();
+                        } on ApiException catch (e) {
+                          if (!mounted) return;
+                          setS(() => isSubmitting = false);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text(e.message)),
+                          );
+                        } catch (_) {
+                          if (!mounted) return;
+                          setS(() => isSubmitting = false);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                                content: Text(
+                                    'Failed to update serial number.')),
+                          );
+                        }
+                      },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF2563EB),
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                ),
+                child: isSubmitting
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2, color: Colors.white),
+                      )
+                    : const Text('Save'),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _deleteSerialNumber(SerialNumberModel sn) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete Serial Number'),
+        content:
+            Text('Delete "${sn.serialnumber}"? This cannot be undone.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFEF4444),
+              foregroundColor: Colors.white,
+              elevation: 0,
+            ),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    try {
+      await _api.deleteSerialNumber(sn.id);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Serial number deleted.')),
+      );
+      if (_serialNumbers.length == 1 && _serialPage > 1) {
+        setState(() => _serialPage--);
+      }
+      _fetchSerialNumbers();
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(e.message)));
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text('Failed to delete serial number.')),
+      );
+    }
   }
 
   Future<void> _loadProduct() async {
@@ -117,11 +326,14 @@ class _ProductDetailsEntitiesScreenState
 
   @override
   Widget build(BuildContext context) {
-    final serialRows = _serialNumbers
-        .where((sn) => sn
-            .toLowerCase()
-            .contains(_searchController.text.trim().toLowerCase()))
-        .toList();
+    final serialRows = _serialNumbers;
+    final serialStart =
+        _serialTotal == 0 ? 0 : ((_serialPage - 1) * _serialPerPage) + 1;
+    final serialEnd = _serialTotal == 0
+        ? 0
+        : (_serialPage * _serialPerPage) > _serialTotal
+            ? _serialTotal
+            : _serialPage * _serialPerPage;
 
     final modelCode = _product?.modelCode ?? _value('modelCode', '');
     final supplierType = _product?.applianceType ?? _value('supplierType', '');
@@ -296,13 +508,25 @@ class _ProductDetailsEntitiesScreenState
               ),
             ),
             const SizedBox(height: 20),
-            const Text(
-              'Serial Number Details',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                color: Colors.black87,
-              ),
+            Row(
+              children: [
+                const Text(
+                  'Serial Number Details',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.black87,
+                  ),
+                ),
+                if (_isLoadingSerials) ...[
+                  const SizedBox(width: 10),
+                  const SizedBox(
+                    width: 14,
+                    height: 14,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                ],
+              ],
             ),
             const SizedBox(height: 8),
             Container(
@@ -326,9 +550,67 @@ class _ProductDetailsEntitiesScreenState
                   ),
                   const SizedBox(height: 10),
                   _buildTableHeader(),
-                  if (serialRows.isEmpty) _buildTableRow(context, ''),
-                  ...serialRows.map((sn) => _buildTableRow(context, sn)),
-                  _buildPaginationFooter(serialRows.length),
+                  if (_isLoadingSerials && serialRows.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 20),
+                      child: Center(
+                          child:
+                              CircularProgressIndicator(strokeWidth: 2)),
+                    )
+                  else if (_serialError != null)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(
+                          vertical: 12, horizontal: 12),
+                      child: Text(
+                        _serialError!,
+                        style: const TextStyle(
+                            color: Color(0xFFB91C1C), fontSize: 12),
+                      ),
+                    )
+                  else if (serialRows.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(
+                          vertical: 16, horizontal: 12),
+                      child: Text(
+                        'No serial numbers found.',
+                        style: TextStyle(
+                            fontSize: 12, color: Colors.black54),
+                      ),
+                    )
+                  else
+                    ...serialRows.map((sn) => _buildTableRow(context, sn)),
+                  _buildPaginationFooter(
+                    start: serialStart,
+                    end: serialEnd,
+                    total: _serialTotal,
+                    page: _serialPage,
+                    lastPage: _serialLastPage,
+                    onFirst: _serialPage > 1
+                        ? () {
+                            setState(() => _serialPage = 1);
+                            _fetchSerialNumbers();
+                          }
+                        : null,
+                    onPrev: _serialPage > 1
+                        ? () {
+                            setState(() => _serialPage--);
+                            _fetchSerialNumbers();
+                          }
+                        : null,
+                    onNext: _serialPage < _serialLastPage
+                        ? () {
+                            setState(() => _serialPage++);
+                            _fetchSerialNumbers();
+                          }
+                        : null,
+                    onLast: _serialPage < _serialLastPage
+                        ? () {
+                            setState(
+                                () => _serialPage = _serialLastPage);
+                            _fetchSerialNumbers();
+                          }
+                        : null,
+                  ),
                 ],
               ),
             ),
@@ -376,7 +658,7 @@ class _ProductDetailsEntitiesScreenState
       height: 36,
       child: TextField(
         controller: _searchController,
-        onChanged: (_) => setState(() {}),
+        onChanged: _onSerialSearchChanged,
         decoration: InputDecoration(
           hintText: hint,
           hintStyle: TextStyle(fontSize: 12, color: Colors.grey[400]),
@@ -427,7 +709,7 @@ class _ProductDetailsEntitiesScreenState
             color: Colors.grey[200],
           ),
           const SizedBox(
-            width: 80,
+            width: 120,
             child: Padding(
               padding: EdgeInsets.symmetric(vertical: 10, horizontal: 8),
               child: Text(
@@ -446,7 +728,7 @@ class _ProductDetailsEntitiesScreenState
     );
   }
 
-  Widget _buildTableRow(BuildContext context, String serialNumber) {
+  Widget _buildTableRow(BuildContext context, SerialNumberModel sn) {
     return Container(
       decoration: BoxDecoration(
         border: Border(bottom: BorderSide(color: Colors.grey[100]!)),
@@ -455,10 +737,12 @@ class _ProductDetailsEntitiesScreenState
         children: [
           Expanded(
             child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
+              padding:
+                  const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
               child: Text(
-                serialNumber,
-                style: const TextStyle(fontSize: 12, color: Colors.black87),
+                sn.serialnumber,
+                style:
+                    const TextStyle(fontSize: 12, color: Colors.black87),
               ),
             ),
           ),
@@ -468,51 +752,64 @@ class _ProductDetailsEntitiesScreenState
             color: Colors.grey[100],
           ),
           SizedBox(
-            width: 80,
-            child: Center(
-              child: serialNumber.isEmpty
-                  ? const SizedBox.shrink()
-                  : OutlinedButton(
-                      onPressed: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => SerialNumberDetailScreen(
-                              item: SerialNumberModel(
-                                id: serialNumber,
-                                clientName: _value('employeeName', '-'),
-                                clientType: _value('supplierType', '-'),
-                                dateCreated: _value('deliveryDate', '-'),
-                                productModel: _value('modelCode', '-'),
-                                serialCodes: [serialNumber],
-                              ),
-                            ),
-                          ),
-                        );
-                      },
-                      style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 6, vertical: 4),
-                        side: const BorderSide(color: Color(0xFF2563EB)),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        mainAxisSize: MainAxisSize.min,
-                        children: const [
-                          Icon(Icons.visibility_outlined,
-                              size: 13, color: Color(0xFF2563EB)),
-                          SizedBox(width: 3),
-                          Text('View',
-                              style: TextStyle(
-                                  fontSize: 11,
-                                  color: Color(0xFF2563EB),
-                                  fontWeight: FontWeight.w600)),
-                        ],
+            width: 120,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                OutlinedButton(
+                  onPressed: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => SerialNumberDetailScreen(
+                        serialId: sn.id,
+                        clientId: sn.clientId,
                       ),
                     ),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 5, vertical: 4),
+                    side: const BorderSide(color: Color(0xFF2563EB)),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(4)),
+                    minimumSize: Size.zero,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: const [
+                      Icon(Icons.visibility_outlined,
+                          size: 13, color: Color(0xFF2563EB)),
+                      SizedBox(width: 2),
+                      Text('View',
+                          style: TextStyle(
+                              fontSize: 11,
+                              color: Color(0xFF2563EB),
+                              fontWeight: FontWeight.w600)),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 4),
+                InkWell(
+                  onTap: () => _showEditSerialDialog(sn),
+                  borderRadius: BorderRadius.circular(4),
+                  child: const Padding(
+                    padding: EdgeInsets.all(4),
+                    child: Icon(Icons.edit_outlined,
+                        size: 16, color: Color(0xFF2563EB)),
+                  ),
+                ),
+                const SizedBox(width: 2),
+                InkWell(
+                  onTap: () => _deleteSerialNumber(sn),
+                  borderRadius: BorderRadius.circular(4),
+                  child: const Padding(
+                    padding: EdgeInsets.all(4),
+                    child: Icon(Icons.delete_outlined,
+                        size: 16, color: Color(0xFFEF4444)),
+                  ),
+                ),
+              ],
             ),
           ),
         ],
@@ -520,22 +817,31 @@ class _ProductDetailsEntitiesScreenState
     );
   }
 
-  Widget _buildPaginationFooter(int count) {
+  Widget _buildPaginationFooter({
+    required int start,
+    required int end,
+    required int total,
+    required int page,
+    required int lastPage,
+    required VoidCallback? onFirst,
+    required VoidCallback? onPrev,
+    required VoidCallback? onNext,
+    required VoidCallback? onLast,
+  }) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Text(
-            count == 0
-                ? 'Showing 0 to 0 of 0 entries'
-                : 'Showing 1 to $count of $count entries',
+            'Showing $start to $end of $total entries',
             style: TextStyle(fontSize: 11, color: Colors.grey[600]),
           ),
           Row(
             children: [
-              _PaginationBtn(icon: Icons.keyboard_double_arrow_left),
-              _PaginationBtn(icon: Icons.chevron_left),
+              _PaginationBtn(
+                  icon: Icons.keyboard_double_arrow_left, onTap: onFirst),
+              _PaginationBtn(icon: Icons.chevron_left, onTap: onPrev),
               Container(
                 padding:
                     const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
@@ -543,17 +849,18 @@ class _ProductDetailsEntitiesScreenState
                   color: const Color(0xFF2563EB),
                   borderRadius: BorderRadius.circular(4),
                 ),
-                child: const Text(
-                  '1',
-                  style: TextStyle(
+                child: Text(
+                  '$page',
+                  style: const TextStyle(
                     fontSize: 11,
                     color: Colors.white,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
               ),
-              _PaginationBtn(icon: Icons.chevron_right),
-              _PaginationBtn(icon: Icons.keyboard_double_arrow_right),
+              _PaginationBtn(icon: Icons.chevron_right, onTap: onNext),
+              _PaginationBtn(
+                  icon: Icons.keyboard_double_arrow_right, onTap: onLast),
             ],
           ),
         ],
@@ -564,16 +871,22 @@ class _ProductDetailsEntitiesScreenState
 
 class _PaginationBtn extends StatelessWidget {
   final IconData icon;
+  final VoidCallback? onTap;
 
-  const _PaginationBtn({Key? key, required this.icon}) : super(key: key);
+  const _PaginationBtn({Key? key, required this.icon, this.onTap})
+      : super(key: key);
 
   @override
   Widget build(BuildContext context) {
     return InkWell(
-      onTap: () {},
+      onTap: onTap,
       child: Padding(
         padding: const EdgeInsets.all(4),
-        child: Icon(icon, size: 16, color: Colors.grey[600]),
+        child: Icon(
+          icon,
+          size: 16,
+          color: onTap != null ? Colors.grey[700] : Colors.grey[350],
+        ),
       ),
     );
   }

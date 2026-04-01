@@ -22,7 +22,7 @@ class _EditServiceTypeScreenState extends State<EditServiceTypeScreen> {
   @override
   void initState() {
     super.initState();
-    _nameController = TextEditingController(text: widget.item.name);
+    _nameController = TextEditingController(text: widget.item.setypename);
   }
 
   @override
@@ -35,7 +35,7 @@ class _EditServiceTypeScreenState extends State<EditServiceTypeScreen> {
     if (!(_formKey.currentState?.validate() ?? false)) return;
 
     final updated = widget.item.copyWith(
-      name: _nameController.text.trim(),
+      setypename: _nameController.text.trim(),
     );
 
     Navigator.of(context).pop(updated);

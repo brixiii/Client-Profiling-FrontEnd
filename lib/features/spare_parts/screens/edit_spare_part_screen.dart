@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import '../models/spare_part_model.dart';
+import '../../../shared/api/api_exception.dart';
+import '../../../shared/api/backend_api.dart';
 import '../../../shared/widgets/custom_app_bar.dart';
 
 /// Edit screen for an existing Spare Part.
@@ -13,6 +16,7 @@ class EditSparePartScreen extends StatefulWidget {
 }
 
 class _EditSparePartScreenState extends State<EditSparePartScreen> {
+  final _api = BackendApi();
   final _formKey = GlobalKey<FormState>();
 
   late final TextEditingController _nameController;
@@ -21,15 +25,18 @@ class _EditSparePartScreenState extends State<EditSparePartScreen> {
   late final TextEditingController _notesController;
   late int _quantity;
 
+  Map<String, String> _fieldErrors = {};
+  bool _submitting = false;
+
   @override
   void initState() {
     super.initState();
-    _nameController = TextEditingController(text: widget.item.name);
+    _nameController = TextEditingController(text: widget.item.sparepartsname);
     _partNumberController =
-        TextEditingController(text: widget.item.partNumber);
+        TextEditingController(text: widget.item.partnumber);
     _dateController = TextEditingController(text: widget.item.date);
-    _notesController = TextEditingController(text: widget.item.notes);
-    _quantity = widget.item.quantity;
+    _notesController = TextEditingController(text: widget.item.spnotes);
+    _quantity = widget.item.spquantity;
   }
 
   @override
@@ -43,14 +50,11 @@ class _EditSparePartScreenState extends State<EditSparePartScreen> {
 
   Future<void> _pickDate() async {
     DateTime initial = DateTime.now();
-    try {
-      final parts = _dateController.text.split('/');
-      if (parts.length == 3) {
-        initial = DateTime(
-            int.parse(parts[2]), int.parse(parts[0]), int.parse(parts[1]));
-      }
-    } catch (_) {}
-
+    if (_dateController.text.isNotEmpty) {
+      try {
+        initial = DateFormat('yyyy-MM-dd').parse(_dateController.text);
+      } catch (_) {}
+    }
     final picked = await showDatePicker(
       context: context,
       initialDate: initial,
@@ -58,21 +62,39 @@ class _EditSparePartScreenState extends State<EditSparePartScreen> {
       lastDate: DateTime(2030),
     );
     if (picked != null) {
-      _dateController.text =
-          '${picked.month.toString().padLeft(2, '0')}/${picked.day.toString().padLeft(2, '0')}/${picked.year}';
+      setState(() {
+        _dateController.text = DateFormat('yyyy-MM-dd').format(picked);
+        _fieldErrors.remove('date');
+      });
     }
   }
 
-  void _saveChanges() {
+  Future<void> _saveChanges() async {
+    setState(() => _fieldErrors = {});
     if (!(_formKey.currentState?.validate() ?? false)) return;
-    final updated = widget.item.copyWith(
-      name: _nameController.text.trim(),
-      partNumber: _partNumberController.text.trim(),
-      quantity: _quantity,
-      date: _dateController.text.trim(),
-      notes: _notesController.text.trim(),
-    );
-    Navigator.of(context).pop(updated);
+    setState(() => _submitting = true);
+    try {
+      await _api.updateSparePart(widget.item.id, {
+        'sparepartsname': _nameController.text.trim(),
+        'partnumber': _partNumberController.text.trim(),
+        'spquantity': _quantity,
+        'date': _dateController.text.trim(),
+        'spnotes': _notesController.text.trim(),
+      });
+      if (mounted) Navigator.of(context).pop(true);
+    } on ApiException catch (e) {
+      if (mounted) {
+        if (e.statusCode == 422 && e.fieldErrors.isNotEmpty) {
+          setState(() => _fieldErrors = Map<String, String>.from(e.fieldErrors));
+          _formKey.currentState?.validate();
+        } else {
+          ScaffoldMessenger.of(context)
+              .showSnackBar(SnackBar(content: Text(e.message)));
+        }
+      }
+    } finally {
+      if (mounted) setState(() => _submitting = false);
+    }
   }
 
   @override
@@ -149,7 +171,7 @@ class _EditSparePartScreenState extends State<EditSparePartScreen> {
                   width: double.infinity,
                   height: 50,
                   child: ElevatedButton(
-                    onPressed: _saveChanges,
+                    onPressed: _submitting ? null : _saveChanges,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFFF5A623),
                       foregroundColor: Colors.white,
@@ -157,7 +179,9 @@ class _EditSparePartScreenState extends State<EditSparePartScreen> {
                       shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(10)),
                     ),
-                    child: const Text('Save Changes',
+                    child: _submitting
+                        ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                        : const Text('Save Changes',
                         style: TextStyle(
                             fontSize: 16, fontWeight: FontWeight.w600)),
                   ),
@@ -236,7 +260,7 @@ class _EditSparePartScreenState extends State<EditSparePartScreen> {
       controller: _dateController,
       readOnly: true,
       onTap: _pickDate,
-      decoration: _inputDecoration('mm/dd/yyyy').copyWith(
+      decoration: _inputDecoration('YYYY-MM-DD').copyWith(
         suffixIcon: const Icon(Icons.calendar_today_outlined,
             size: 18, color: Colors.black45),
       ),

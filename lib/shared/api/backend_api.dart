@@ -6,6 +6,10 @@ import '../models/csr_guide_content.dart';
 import '../models/csr_guide_section.dart';
 import '../models/employee.dart';
 import '../models/product.dart';
+import '../../features/product_model/models/product_model.dart';
+import '../../features/serial_number/models/serial_number_model.dart';
+import '../../features/service_type/models/service_type_model.dart';
+import '../../features/spare_parts/models/spare_part_model.dart';
 import '../models/reseller.dart';
 import '../models/reseller_product.dart';
 import '../models/shop.dart';
@@ -408,6 +412,12 @@ class BackendApi {
     return _parsePage<ShopProduct>(result, ShopProduct.fromJson);
   }
 
+  Future<ShopProduct> getShopProductById(int id) async {
+    final result = await _api.get('/shop-products/$id');
+    final map = _unwrapSingle(result);
+    return ShopProduct.fromJson(map);
+  }
+
   Future<ShopProduct> createShopProduct(Map<String, dynamic> payload) async {
     final result = await _api.post('/shop-products', body: payload);
     final map = _unwrapSingle(result);
@@ -452,6 +462,96 @@ class BackendApi {
     return AvailedService.fromJson(map);
   }
 
+  /// Creates an availed service with the full contract payload.
+  /// Uses multipart/form-data when a file is attached, JSON otherwise.
+  /// Arrays are encoded as `field[0]`, `field[1]` … for Laravel compatibility.
+  Future<AvailedService> createAvailedServiceFull({
+    required String serviceOrderReportNo,
+    required String serviceTypeId,
+    required String serviceDate,
+    String? notes,
+    String? filePath,
+    List<int>? fileBytes,
+    String? fileName,
+    required List<int> serialNumberIds,
+    required List<Map<String, int>> spareParts,
+    required List<int> technicianIds,
+    required int clientId,
+    int? shopId,
+  }) async {
+    final hasFile = (fileBytes != null && fileBytes.isNotEmpty) ||
+        (filePath != null && filePath.isNotEmpty);
+
+    if (hasFile) {
+      final token = await _tokenStorage.getToken();
+      final uri = Uri.parse('${ApiConfig.baseApiUrl}/availed-services');
+      final request = http.MultipartRequest('POST', uri)
+        ..headers['Authorization'] = 'Bearer ${token ?? ''}'
+        ..headers['Accept'] = 'application/json';
+
+      request.fields['service_order_report_no'] = serviceOrderReportNo;
+      request.fields['service_type_id'] = serviceTypeId;
+      request.fields['service_date'] = serviceDate;
+      request.fields['client_id'] = clientId.toString();
+      if (shopId != null) request.fields['shop_id'] = shopId.toString();
+      if (notes != null && notes.isNotEmpty) request.fields['notes'] = notes;
+
+      for (var i = 0; i < serialNumberIds.length; i++) {
+        request.fields['serial_number_ids[$i]'] =
+            serialNumberIds[i].toString();
+      }
+      for (var i = 0; i < spareParts.length; i++) {
+        request.fields['spare_parts[$i][spare_part_id]'] =
+            spareParts[i]['spare_part_id'].toString();
+        request.fields['spare_parts[$i][quantity]'] =
+            spareParts[i]['quantity'].toString();
+      }
+      for (var i = 0; i < technicianIds.length; i++) {
+        request.fields['technician_ids[$i]'] = technicianIds[i].toString();
+      }
+
+      // Prefer bytes (always safe cross-platform).
+      // Fall back to path only on native platforms where path is available.
+      if (fileBytes != null && fileBytes.isNotEmpty && fileName != null) {
+        request.files.add(http.MultipartFile.fromBytes(
+          'attachment',
+          fileBytes,
+          filename: fileName,
+        ));
+      } else if (filePath != null && filePath.isNotEmpty) {
+        request.files
+            .add(await http.MultipartFile.fromPath('attachment', filePath));
+      }
+
+      final streamed = await request.send();
+      final response = await http.Response.fromStream(streamed);
+      final decoded = jsonDecode(response.body);
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        final map = decoded['data'] is Map<String, dynamic>
+            ? decoded['data'] as Map<String, dynamic>
+            : decoded as Map<String, dynamic>;
+        return AvailedService.fromJson(map);
+      }
+      throw ApiException.fromResponse(
+          statusCode: response.statusCode, decodedBody: decoded);
+    }
+
+    // No file — JSON submission
+    final payload = <String, dynamic>{
+      'service_order_report_no': serviceOrderReportNo,
+      'service_type_id': serviceTypeId,
+      'service_date': serviceDate,
+      if (notes != null && notes.isNotEmpty) 'notes': notes,
+      'client_id': clientId,
+      if (shopId != null) 'shop_id': shopId,
+      'serial_number_ids': serialNumberIds,
+      'spare_parts': spareParts,
+      'technician_ids': technicianIds,
+    };
+    final result = await _api.post('/availed-services', body: payload);
+    return AvailedService.fromJson(_unwrapSingle(result));
+  }
+
   Future<AvailedService> getAvailedServiceById(int id) async {
     final result = await _api.get('/availed-services/$id');
     final map = _unwrapSingle(result);
@@ -471,21 +571,156 @@ class BackendApi {
     await _api.delete('/availed-services/$id');
   }
 
-  Future<PaginatedResponse<Map<String, dynamic>>> getServiceTypes({
+  // ── Service Types ────────────────────────────────────────────────
+  Future<PaginatedResponse<ServiceTypeModel>> getServiceTypes({
     required int page,
     required int perPage,
-    String? q,
   }) async {
     final result = await _api.get('/service-types', query: {
       'page': page,
       'per_page': perPage,
-      'q': q,
     });
+    return _parsePage<ServiceTypeModel>(result, ServiceTypeModel.fromJson);
+  }
 
-    return _parsePage<Map<String, dynamic>>(
-      result,
-      (json) => json,
-    );
+  Future<ServiceTypeModel> getServiceTypeById(int id) async {
+    final result = await _api.get('/service-types/$id');
+    if (result is! Map<String, dynamic>) {
+      throw ApiException(statusCode: 500, message: 'Invalid service type response.');
+    }
+    final data = result['data'] ?? result;
+    return ServiceTypeModel.fromJson(data as Map<String, dynamic>);
+  }
+
+  Future<ServiceTypeModel> createServiceType({required String setypename}) async {
+    final result = await _api.post('/service-types', body: {'setypename': setypename});
+    if (result is! Map<String, dynamic>) {
+      throw ApiException(statusCode: 500, message: 'Invalid service type response.');
+    }
+    final data = result['data'] ?? result;
+    return ServiceTypeModel.fromJson(data as Map<String, dynamic>);
+  }
+
+  Future<ServiceTypeModel> updateServiceType(int id, {required String setypename}) async {
+    final result = await _api.put('/service-types/$id', body: {'setypename': setypename});
+    if (result is! Map<String, dynamic>) {
+      throw ApiException(statusCode: 500, message: 'Invalid service type response.');
+    }
+    final data = result['data'] ?? result;
+    return ServiceTypeModel.fromJson(data as Map<String, dynamic>);
+  }
+
+  Future<void> deleteServiceType(int id) async {
+    await _api.delete('/service-types/$id');
+  }
+
+  // ── Spare Parts ──────────────────────────────────────────────────────────
+  Future<PaginatedResponse<SparePartModel>> getSpareParts({
+    required int page,
+    required int perPage,
+    String? q,
+  }) async {
+    final result = await _api.get('/spare-parts', query: {
+      'page': page,
+      'per_page': perPage,
+      if (q != null && q.isNotEmpty) 'q': q,
+    });
+    return _parsePage<SparePartModel>(result, SparePartModel.fromJson);
+  }
+
+  /// Fetches all spare parts across all pages and returns the merged list.
+  /// Deduplicates strictly by id (first occurrence wins) before returning.
+  Future<List<SparePartModel>> fetchAllSpareParts() async {
+    const perPage = 100;
+    final first = await getSpareParts(page: 1, perPage: perPage);
+    final all = List<SparePartModel>.from(first.data);
+    for (int p = 2; p <= first.lastPage; p++) {
+      final page = await getSpareParts(page: p, perPage: perPage);
+      all.addAll(page.data);
+    }
+    // Deduplicate by id, preserving first-occurrence order.
+    final seen = <int>{};
+    return all.where((m) => seen.add(m.id)).toList();
+  }
+
+  Future<SparePartModel> getSparePartById(int id) async {
+    final result = await _api.get('/spare-parts/$id');
+    if (result is! Map<String, dynamic>) {
+      throw ApiException(statusCode: 500, message: 'Invalid spare part response.');
+    }
+    final data = result['data'] ?? result;
+    return SparePartModel.fromJson(data as Map<String, dynamic>);
+  }
+
+  Future<SparePartModel> createSparePart(Map<String, dynamic> payload) async {
+    final result = await _api.post('/spare-parts', body: payload);
+    if (result is! Map<String, dynamic>) {
+      throw ApiException(statusCode: 500, message: 'Invalid spare part response.');
+    }
+    final data = result['data'] ?? result;
+    return SparePartModel.fromJson(data as Map<String, dynamic>);
+  }
+
+  Future<SparePartModel> updateSparePart(int id, Map<String, dynamic> payload) async {
+    final result = await _api.put('/spare-parts/$id', body: payload);
+    if (result is! Map<String, dynamic>) {
+      throw ApiException(statusCode: 500, message: 'Invalid spare part response.');
+    }
+    final data = result['data'] ?? result;
+    return SparePartModel.fromJson(data as Map<String, dynamic>);
+  }
+
+  Future<void> deleteSparePart(int id) async {
+    await _api.delete('/spare-parts/$id');
+  }
+
+  // ── Serial Numbers ───────────────────────────────────────────────────────
+  Future<PaginatedResponse<SerialNumberModel>> getSerialNumbers({
+    required int page,
+    required int perPage,
+    String? q,
+    int? clientId,
+    int? shopProductId,
+  }) async {
+    final result = await _api.get('/serial-numbers', query: {
+      'page': page,
+      'per_page': perPage,
+      if (q != null && q.isNotEmpty) 'q': q,
+      if (clientId != null) 'client_id': clientId,
+      if (shopProductId != null) 'shop_product_id': shopProductId,
+    });
+    return _parsePage<SerialNumberModel>(result, SerialNumberModel.fromJson);
+  }
+
+  Future<SerialNumberModel> getSerialNumberById(int id) async {
+    final result = await _api.get('/serial-numbers/$id');
+    if (result is! Map<String, dynamic>) {
+      throw ApiException(statusCode: 500, message: 'Invalid serial number response.');
+    }
+    final data = result['data'] ?? result;
+    return SerialNumberModel.fromJson(data as Map<String, dynamic>);
+  }
+
+  Future<SerialNumberModel> createSerialNumber(Map<String, dynamic> payload) async {
+    final result = await _api.post('/serial-numbers', body: payload);
+    if (result is! Map<String, dynamic>) {
+      throw ApiException(statusCode: 500, message: 'Invalid serial number response.');
+    }
+    final data = result['data'] ?? result;
+    return SerialNumberModel.fromJson(data as Map<String, dynamic>);
+  }
+
+  Future<SerialNumberModel> updateSerialNumber(int id, Map<String, dynamic> payload) async {
+    final result = await _api.put('/serial-numbers/$id', body: payload);
+    if (result is! Map<String, dynamic>) {
+      throw ApiException(statusCode: 500, message: 'Invalid serial number response.');
+    }
+    final data = result['data'] ?? result;
+    return SerialNumberModel.fromJson(data as Map<String, dynamic>);
+  }
+
+  Future<void> deleteSerialNumber(int id) async {
+    await _api.delete('/serial-numbers/$id');
   }
 
   // ── Resellers ───────────────────────────────────────────────────────
@@ -673,6 +908,51 @@ class BackendApi {
     }
 
     return raw;
+  }
+
+  // ── Product Models ───────────────────────────────────────────────────────
+
+  Future<PaginatedResponse<ProductModel>> getProductModels({
+    required int page,
+    required int perPage,
+  }) async {
+    final result = await _api.get('/product-models', query: {
+      'page': page,
+      'per_page': perPage,
+    });
+    return _parsePage<ProductModel>(result, ProductModel.fromJson);
+  }
+
+  Future<ProductModel> getProductModelById(int id) async {
+    final result = await _api.get('/product-models/$id');
+    return ProductModel.fromJson(_unwrapSingle(result));
+  }
+
+  Future<ProductModel> createProductModel({
+    required String applianceType,
+    required String modelname,
+    required String modelCode,
+    String status = 'Latest',
+  }) async {
+    final result = await _api.post('/product-models', body: {
+      'appliance_type': applianceType,
+      'modelname': modelname,
+      'model_code': modelCode,
+      'status': status,
+    });
+    return ProductModel.fromJson(_unwrapSingle(result));
+  }
+
+  Future<ProductModel> updateProductModel({
+    required int id,
+    required Map<String, dynamic> payload,
+  }) async {
+    final result = await _api.put('/product-models/$id', body: payload);
+    return ProductModel.fromJson(_unwrapSingle(result));
+  }
+
+  Future<void> deleteProductModel(int id) async {
+    await _api.delete('/product-models/$id');
   }
 
   // ── CSR Guide ─────────────────────────────────────────────────────────────

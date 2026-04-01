@@ -39,7 +39,7 @@ class SparePartCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  item.name,
+                  item.sparepartsname,
                   style: const TextStyle(
                     fontSize: 15,
                     fontWeight: FontWeight.w600,
@@ -48,7 +48,7 @@ class SparePartCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  'Part #: ${item.partNumber}',
+                  'Part #: ${item.partnumber}',
                   style: const TextStyle(fontSize: 13, color: Colors.black54),
                 ),
               ],
@@ -58,7 +58,7 @@ class SparePartCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Text(
-                '${item.stock} ${item.unit}',
+                '${item.spquantity} pcs',
                 style: const TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w600,

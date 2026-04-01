@@ -225,9 +225,8 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> {
       setState(() {
         _serviceTypeNameById = {
           for (final row in serviceTypes.data)
-            if ((row['id']?.toString().trim().isNotEmpty ?? false) &&
-                (row['setypename']?.toString().trim().isNotEmpty ?? false))
-              row['id'].toString().trim(): row['setypename'].toString().trim(),
+            if (row.setypename.trim().isNotEmpty)
+              row.id.toString(): row.setypename.trim(),
         };
 
         _employeeNameById = {
@@ -1102,6 +1101,7 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> {
     final product = p.product;
     final productMap = {
       'id': product.id.toString(),
+      'shop_product_id': p.id.toString(),
       'modelName': product.modelName,
       'modelCode': product.modelCode,
       'supplierType': product.applianceType,
@@ -1199,7 +1199,27 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> {
 
   Widget _buildServiceRow(BuildContext context, AvailedService s) {
     final resolvedServiceType = _serviceTypeName(s.serviceTypeId);
-    final resolvedTechnician = _employeeName(s.employeeId);
+
+    // Build serial+spare-parts display string from pivot data (new format),
+    // falling back to the legacy single serial_number_id column.
+    final serialStr = s.serialNumbersList.isNotEmpty
+        ? s.serialNumbersList.join(', ')
+        : (s.serialNumberId.isNotEmpty ? s.serialNumberId : '-');
+
+    final spareStr = s.sparePartsList.isNotEmpty
+        ? s.sparePartsList
+            .map((sp) => '${sp['name']} ×${sp['quantity']}')
+            .join(', ')
+        : null;
+
+    final serialSpareParts =
+        spareStr != null ? '$serialStr | $spareStr' : serialStr;
+
+    // Build technician display string from pivot data (new format),
+    // falling back to the legacy single employee_id column.
+    final techStr = s.technicianNames.isNotEmpty
+        ? s.technicianNames.join(', ')
+        : (s.employeeId != null ? _employeeName(s.employeeId) : '-');
 
     final serviceMap = {
       'id': s.id.toString(),
@@ -1208,9 +1228,11 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> {
       'serviceType': resolvedServiceType,
       'serviceTypeId': s.serviceTypeId,
       'serviceDate': s.serviceDate,
-      'serialNumber': s.serialNumberId,
-      'serialSpareParts': s.serialNumberId,
-      'technicians': resolvedTechnician,
+      'serialNumber': s.serialNumbersList.isNotEmpty
+          ? s.serialNumbersList.first
+          : s.serialNumberId,
+      'serialSpareParts': serialSpareParts,
+      'technicians': techStr,
       'image': s.image,
       'notes': s.notes,
       'shop_id': s.shopId?.toString() ?? '',

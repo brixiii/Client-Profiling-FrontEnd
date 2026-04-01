@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/spare_part_model.dart';
+import '../../../shared/api/api_exception.dart';
+import '../../../shared/api/backend_api.dart';
 import '../../../shared/widgets/app_drawer.dart';
 import '../../../shared/widgets/custom_app_bar.dart';
 import 'add_spare_part_screen.dart';
@@ -13,74 +15,55 @@ class SparePartsScreen extends StatefulWidget {
 }
 
 class _SparePartsScreenState extends State<SparePartsScreen> {
+  final _api = BackendApi();
   final TextEditingController _searchController = TextEditingController();
+
   String _searchQuery = '';
   int _currentPage = 1;
-  final int _itemsPerPage = 5;
+  static const int _itemsPerPage = 10;
 
-  final List<SparePartModel> _items = const [
-    SparePartModel(
-      id: '1',
-      name: 'Base Assembly,\nCabinet',
-      partNumber: 'BA-001',
-      stock: 8,
-      unit: 'pcs',
-      quantity: 8,
-      date: '03/24/2026',
-      notes: '',
-    ),
-    SparePartModel(
-      id: '2',
-      name: 'Bearing, Belt',
-      partNumber: 'BB-002',
-      stock: 8,
-      unit: 'pcs',
-      quantity: 8,
-      date: '03/24/2026',
-      notes: '',
-    ),
-    SparePartModel(
-      id: '3',
-      name: 'Delivery',
-      partNumber: 'DL-003',
-      stock: 8,
-      unit: 'pcs',
-      quantity: 8,
-      date: '03/24/2026',
-      notes: '',
-    ),
-    SparePartModel(
-      id: '4',
-      name: 'Belt, Poly V',
-      partNumber: '4400EL2001D',
-      stock: 1,
-      unit: 'pcs',
-      quantity: 1,
-      date: '03/24/2026',
-      notes: '6322-1186875A141 Belt, Poly V',
-    ),
-  ];
+  List<SparePartModel> _items = [];
+  bool _isLoading = true;
+  String? _error;
+  int _lastPage = 1;
+  int _total = 0;
 
-  List<SparePartModel> get _filtered => _items
-      .where((e) =>
-          e.name.toLowerCase().contains(_searchQuery.toLowerCase()) ||
-          e.partNumber.toLowerCase().contains(_searchQuery.toLowerCase()))
-      .toList();
-
-  List<SparePartModel> get _pageItems {
-    final start = (_currentPage - 1) * _itemsPerPage;
-    final end = (start + _itemsPerPage).clamp(0, _filtered.length);
-    if (start >= _filtered.length) return [];
-    return _filtered.sublist(start, end);
+  @override
+  void initState() {
+    super.initState();
+    _loadPage();
   }
-
-  int get _totalPages =>
-      (_filtered.length / _itemsPerPage).ceil().clamp(1, double.maxFinite).toInt();
 
   @override
   void dispose() {
     _searchController.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadPage() async {
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+    try {
+      final resp = await _api.getSpareParts(
+        page: _currentPage,
+        perPage: _itemsPerPage,
+        q: _searchQuery.isEmpty ? null : _searchQuery,
+      );
+      if (mounted) {
+        setState(() {
+          _items = resp.data;
+          _lastPage = resp.lastPage;
+          _total = resp.total;
+          _isLoading = false;
+        });
+      }
+    } on ApiException catch (e) {
+      if (mounted) setState(() { _error = e.message; _isLoading = false; });
+    } catch (e) {
+      if (mounted) setState(() { _error = e.toString(); _isLoading = false; });
+    }
   }
 
   @override
@@ -103,7 +86,8 @@ class _SparePartsScreenState extends State<SparePartsScreen> {
                 const SizedBox(width: 12),
                 Expanded(
                   child: _StatCard(
-                      label: 'Available\nSpare Parts', value: '1257'),
+                      label: 'Available\nSpare Parts',
+                      value: _isLoading ? '...' : '$_total'),
                 ),
               ],
             ),
@@ -123,12 +107,13 @@ class _SparePartsScreenState extends State<SparePartsScreen> {
                   ),
                 ),
                 ElevatedButton.icon(
-                  onPressed: () {
-                    Navigator.of(context).push(
+                  onPressed: () async {
+                    final added = await Navigator.of(context).push<bool>(
                       MaterialPageRoute(
                         builder: (_) => const AddSparePartScreen(),
                       ),
                     );
+                    if (added == true) _loadPage();
                   },
                   icon: const Icon(Icons.add, size: 18, color: Colors.white),
                   label: const Text(
@@ -184,10 +169,13 @@ class _SparePartsScreenState extends State<SparePartsScreen> {
                         color: Color(0xFF2563EB), width: 1.5),
                   ),
                 ),
-                onChanged: (v) => setState(() {
-                  _searchQuery = v;
-                  _currentPage = 1;
-                }),
+                onChanged: (v) {
+                  setState(() {
+                    _searchQuery = v;
+                    _currentPage = 1;
+                  });
+                  _loadPage();
+                },
               ),
             ),
             const SizedBox(height: 12),
@@ -251,12 +239,12 @@ class _SparePartsScreenState extends State<SparePartsScreen> {
                               width: 1,
                               thickness: 1,
                               color: Color(0xFFCCCCCC)),
-                          SizedBox(
+                          const SizedBox(
                             width: 80,
                             child: Padding(
-                              padding: const EdgeInsets.symmetric(
+                              padding: EdgeInsets.symmetric(
                                   vertical: 12, horizontal: 8),
-                              child: const Text(
+                              child: Text(
                                 'Actions',
                                 textAlign: TextAlign.center,
                                 style: TextStyle(
@@ -274,8 +262,28 @@ class _SparePartsScreenState extends State<SparePartsScreen> {
                   const Divider(
                       height: 1, thickness: 1, color: Color(0xFFCCCCCC)),
 
-                  // Rows
-                  if (_pageItems.isEmpty)
+                  // Loading / error / empty / rows
+                  if (_isLoading)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 28),
+                      child: Center(child: CircularProgressIndicator()),
+                    )
+                  else if (_error != null)
+                    Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        children: [
+                          Text(_error!,
+                              style: const TextStyle(
+                                  color: Colors.red, fontSize: 13)),
+                          const SizedBox(height: 8),
+                          TextButton(
+                              onPressed: _loadPage,
+                              child: const Text('Retry')),
+                        ],
+                      ),
+                    )
+                  else if (_items.isEmpty)
                     const Padding(
                       padding: EdgeInsets.symmetric(vertical: 24),
                       child: Center(
@@ -285,88 +293,98 @@ class _SparePartsScreenState extends State<SparePartsScreen> {
                       ),
                     )
                   else
-                    ...List.generate(_pageItems.length, (index) {
-                      final item = _pageItems[index];
-                      final isLast = index == _pageItems.length - 1;
+                    ...List.generate(_items.length, (index) {
+                      final item = _items[index];
+                      final isLast = index == _items.length - 1;
                       return Column(
                         children: [
                           IntrinsicHeight(
                             child: Row(
                               children: [
-                                  Expanded(
-                                    flex: 5,
-                                    child: Padding(
-                                      padding: const EdgeInsets.symmetric(
-                                          vertical: 14, horizontal: 8),
-                                      child: Text(
-                                        item.name,
-                                        textAlign: TextAlign.center,
-                                        style: const TextStyle(
-                                          fontSize: 13,
-                                          color: Colors.black87,
-                                        ),
+                                Expanded(
+                                  flex: 5,
+                                  child: Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                        vertical: 14, horizontal: 8),
+                                    child: Text(
+                                      item.sparepartsname,
+                                      textAlign: TextAlign.center,
+                                      style: const TextStyle(
+                                        fontSize: 13,
+                                        color: Colors.black87,
                                       ),
                                     ),
                                   ),
-                                  const VerticalDivider(
-                                      width: 1,
-                                      thickness: 1,
-                                      color: Color(0xFFCCCCCC)),
-                                  Expanded(
-                                    flex: 4,
-                                    child: Padding(
-                                      padding: const EdgeInsets.symmetric(
-                                          vertical: 14, horizontal: 8),
-                                      child: Text(
-                                        '${item.stock}',
-                                        textAlign: TextAlign.center,
-                                        style: const TextStyle(
-                                          fontSize: 13,
-                                          color: Colors.black87,
-                                        ),
+                                ),
+                                const VerticalDivider(
+                                    width: 1,
+                                    thickness: 1,
+                                    color: Color(0xFFCCCCCC)),
+                                Expanded(
+                                  flex: 4,
+                                  child: Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                        vertical: 14, horizontal: 8),
+                                    child: Text(
+                                      '${item.spquantity}',
+                                      textAlign: TextAlign.center,
+                                      style: const TextStyle(
+                                        fontSize: 13,
+                                        color: Colors.black87,
                                       ),
                                     ),
                                   ),
-                                  const VerticalDivider(
-                                      width: 1,
-                                      thickness: 1,
-                                      color: Color(0xFFCCCCCC)),
-                                  SizedBox(
-                                    width: 80,
+                                ),
+                                const VerticalDivider(
+                                    width: 1,
+                                    thickness: 1,
+                                    color: Color(0xFFCCCCCC)),
+                                SizedBox(
+                                  width: 80,
+                                  child: Center(
                                     child: Padding(
                                       padding: const EdgeInsets.symmetric(
                                           vertical: 10, horizontal: 6),
                                       child: OutlinedButton(
-                                        onPressed: () {
-                                          Navigator.of(context).push(
+                                        onPressed: () async {
+                                          final changed =
+                                              await Navigator.of(context)
+                                                  .push<bool>(
                                             MaterialPageRoute(
                                               builder: (_) =>
-                                                  SparePartDetailScreen(item: item),
+                                                  SparePartDetailScreen(
+                                                      itemId: item.id),
                                             ),
                                           );
+                                          if (changed == true) _loadPage();
                                         },
                                         style: OutlinedButton.styleFrom(
-                                          padding: const EdgeInsets.symmetric(
-                                              horizontal: 4, vertical: 4),
+                                          padding:
+                                              const EdgeInsets.symmetric(
+                                                  horizontal: 4,
+                                                  vertical: 4),
                                           side: const BorderSide(
                                               color: Color(0xFF2563EB)),
                                           shape: RoundedRectangleBorder(
                                               borderRadius:
-                                                  BorderRadius.circular(4)),
+                                                  BorderRadius.circular(
+                                                      4)),
                                         ),
                                         child: Row(
                                           mainAxisAlignment:
                                               MainAxisAlignment.center,
                                           mainAxisSize: MainAxisSize.min,
                                           children: const [
-                                            Icon(Icons.visibility_outlined,
+                                            Icon(
+                                                Icons.visibility_outlined,
                                                 size: 13,
                                                 color: Color(0xFF2563EB)),
                                             SizedBox(width: 3),
                                             Text('View',
                                                 style: TextStyle(
                                                     fontSize: 11,
-                                                    color: Color(0xFF2563EB),
+                                                    color:
+                                                        Color(0xFF2563EB),
                                                     fontWeight:
                                                         FontWeight.w600)),
                                           ],
@@ -374,7 +392,8 @@ class _SparePartsScreenState extends State<SparePartsScreen> {
                                       ),
                                     ),
                                   ),
-                                ],
+                                ),
+                              ],
                             ),
                           ),
                           if (!isLast)
@@ -395,26 +414,31 @@ class _SparePartsScreenState extends State<SparePartsScreen> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  _filtered.isEmpty
+                  _total == 0
                       ? 'Showing 0 entries'
-                      : 'Showing ${(_currentPage - 1) * _itemsPerPage + 1} to '
-                          '${(_currentPage * _itemsPerPage).clamp(1, _filtered.length)} '
-                          'of ${_filtered.length} entries',
-                  style: const TextStyle(
-                      fontSize: 11, color: Colors.black45),
+                      : 'Showing ${(_currentPage - 1) * _itemsPerPage + 1}'
+                          '\u2013${(_currentPage - 1) * _itemsPerPage + _items.length}'
+                          ' of $_total entries',
+                  style: const TextStyle(fontSize: 11, color: Colors.black45),
                 ),
                 Row(
                   children: [
                     _PageButton(
                       icon: Icons.first_page,
                       onTap: _currentPage > 1
-                          ? () => setState(() => _currentPage = 1)
+                          ? () {
+                              setState(() => _currentPage = 1);
+                              _loadPage();
+                            }
                           : null,
                     ),
                     _PageButton(
                       icon: Icons.chevron_left,
                       onTap: _currentPage > 1
-                          ? () => setState(() => _currentPage -= 1)
+                          ? () {
+                              setState(() => _currentPage--);
+                              _loadPage();
+                            }
                           : null,
                     ),
                     Container(
@@ -425,23 +449,27 @@ class _SparePartsScreenState extends State<SparePartsScreen> {
                             Border.all(color: const Color(0xFFCCCCCC)),
                         borderRadius: BorderRadius.circular(4),
                       ),
-                      child: Text(
-                        '$_currentPage',
-                        style: const TextStyle(
-                            fontSize: 12, fontWeight: FontWeight.w600),
-                      ),
+                      child: Text('$_currentPage',
+                          style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600)),
                     ),
                     _PageButton(
                       icon: Icons.chevron_right,
-                      onTap: _currentPage < _totalPages
-                          ? () => setState(() => _currentPage += 1)
+                      onTap: _currentPage < _lastPage
+                          ? () {
+                              setState(() => _currentPage++);
+                              _loadPage();
+                            }
                           : null,
                     ),
                     _PageButton(
                       icon: Icons.last_page,
-                      onTap: _currentPage < _totalPages
-                          ? () =>
-                              setState(() => _currentPage = _totalPages)
+                      onTap: _currentPage < _lastPage
+                          ? () {
+                              setState(() => _currentPage = _lastPage);
+                              _loadPage();
+                            }
                           : null,
                     ),
                   ],

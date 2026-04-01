@@ -480,68 +480,49 @@ class _ResellersScreenState extends State<ResellersScreen> {
                       ),
                       Row(
                         children: [
-                          IconButton(
-                            onPressed: _currentPage > 1
-                                ? () {
-                                    setState(() {
-                                      _currentPage = 1;
-                                    });
-                                    _fetchResellers();
-                                  }
-                                : null,
-                            icon: const Icon(Icons.first_page),
-                            iconSize: 20,
-                            padding: EdgeInsets.zero,
-                            constraints: const BoxConstraints(),
+                          // «« First page
+                          _pageBtn(
+                            icon: Icons.keyboard_double_arrow_left,
+                            enabled: _currentPage > 1,
+                            onTap: () { setState(() => _currentPage = 1); _fetchResellers(); },
                           ),
-                          const SizedBox(width: 8),
-                          IconButton(
-                            onPressed: _currentPage > 1
-                                ? () {
-                                    setState(() {
-                                      _currentPage--;
-                                    });
-                                    _fetchResellers();
-                                  }
-                                : null,
-                            icon: const Icon(Icons.chevron_left),
-                            iconSize: 20,
-                            padding: EdgeInsets.zero,
-                            constraints: const BoxConstraints(),
+                          const SizedBox(width: 4),
+                          // ‹ Prev
+                          _pageBtn(
+                            icon: Icons.chevron_left,
+                            enabled: _currentPage > 1,
+                            onTap: () { setState(() => _currentPage--); _fetchResellers(); },
                           ),
-                          const SizedBox(width: 8),
+                          const SizedBox(width: 6),
+                          // Current page bubble
                           Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 6,
-                            ),
+                            padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 7),
                             decoration: BoxDecoration(
                               color: const Color(0xFF2563EB),
-                              borderRadius: BorderRadius.circular(4),
+                              borderRadius: BorderRadius.circular(8),
                             ),
                             child: Text(
                               _currentPage.toString(),
                               style: const TextStyle(
-                                fontSize: 12,
+                                fontSize: 13,
                                 fontWeight: FontWeight.w600,
                                 color: Colors.white,
                               ),
                             ),
                           ),
-                          const SizedBox(width: 8),
-                          IconButton(
-                            onPressed: _currentPage < _lastPage
-                                ? () {
-                                    setState(() {
-                                      _currentPage++;
-                                    });
-                                    _fetchResellers();
-                                  }
-                                : null,
-                            icon: const Icon(Icons.chevron_right),
-                            iconSize: 20,
-                            padding: EdgeInsets.zero,
-                            constraints: const BoxConstraints(),
+                          const SizedBox(width: 6),
+                          // › Next
+                          _pageBtn(
+                            icon: Icons.chevron_right,
+                            enabled: _currentPage < _lastPage,
+                            onTap: () { setState(() => _currentPage++); _fetchResellers(); },
+                          ),
+                          const SizedBox(width: 4),
+                          // »» Last page
+                          _pageBtn(
+                            icon: Icons.keyboard_double_arrow_right,
+                            enabled: _currentPage < _lastPage,
+                            onTap: () { setState(() => _currentPage = _lastPage); _fetchResellers(); },
                           ),
                         ],
                       ),
@@ -553,6 +534,17 @@ class _ResellersScreenState extends State<ResellersScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _pageBtn({required IconData icon, required bool enabled, required VoidCallback onTap}) {
+    return GestureDetector(
+      onTap: enabled ? onTap : null,
+      child: Icon(
+        icon,
+        size: 22,
+        color: enabled ? Colors.grey[700] : Colors.grey[350],
       ),
     );
   }

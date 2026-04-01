@@ -208,7 +208,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                           // Username field
                                           CustomTextField(
                                             hintText:
-                                                'Username/Phone no./Email',
+                                                'Username/Email',
                                             icon: Icons.person_outline,
                                             controller: _usernameController,
                                             validator: (value) {

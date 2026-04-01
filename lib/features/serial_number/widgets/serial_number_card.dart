@@ -39,7 +39,7 @@ class SerialNumberCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  item.clientName,
+                  item.clientName.isEmpty ? 'N/A' : item.clientName,
                   style: const TextStyle(
                     fontSize: 15,
                     fontWeight: FontWeight.w600,
@@ -48,7 +48,7 @@ class SerialNumberCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  '${item.clientType} · ${item.productModel}',
+                  '${item.supplierType.isEmpty ? 'N/A' : item.supplierType} · ${item.serialnumber}',
                   style: const TextStyle(fontSize: 13, color: Colors.black54),
                 ),
               ],

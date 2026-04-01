@@ -3,6 +3,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:intl/intl.dart';
 import '../../../shared/api/api_exception.dart';
 import '../../../shared/api/backend_api.dart';
+import '../../../features/service_type/models/service_type_model.dart';
 import '../../../shared/widgets/custom_app_bar.dart';
 
 class UpdateServiceScreen extends StatefulWidget {
@@ -49,7 +50,7 @@ class _UpdateServiceScreenState extends State<UpdateServiceScreen> {
   int? _shopId;
   String? _selectedServiceTypeId;
 
-  List<Map<String, dynamic>> _serviceTypeRows = const [];
+  List<ServiceTypeModel> _serviceTypeRows = const [];
   List<Map<String, dynamic>> _employeeRows = const [];
 
   final List<String> _serialNumberOptions = [];
@@ -198,7 +199,7 @@ class _UpdateServiceScreenState extends State<UpdateServiceScreen> {
       _serviceTypeOptions
         ..clear()
         ..addAll(_serviceTypeRows.map((row) {
-          final name = row['setypename']?.toString().trim() ?? '';
+          final name = row.setypename.trim();
           return name.isEmpty ? 'Service Type' : name;
         }));
 
@@ -228,7 +229,7 @@ class _UpdateServiceScreenState extends State<UpdateServiceScreen> {
         _selectedServiceTypeId = service.serviceTypeId;
 
         final typeIndex = _serviceTypeRows.indexWhere(
-          (row) => row['id']?.toString() == _selectedServiceTypeId,
+          (row) => row.id.toString() == _selectedServiceTypeId,
         );
         if (typeIndex >= 0 && typeIndex < _serviceTypeOptions.length) {
           _selectedServiceType = _serviceTypeOptions[typeIndex];
@@ -302,7 +303,7 @@ class _UpdateServiceScreenState extends State<UpdateServiceScreen> {
 
     final typeIndex = _serviceTypeOptions.indexOf(_selectedServiceType ?? '');
     if (typeIndex >= 0 && typeIndex < _serviceTypeRows.length) {
-      _selectedServiceTypeId = _serviceTypeRows[typeIndex]['id']?.toString();
+      _selectedServiceTypeId = _serviceTypeRows[typeIndex].id.toString();
     }
 
     setState(() {

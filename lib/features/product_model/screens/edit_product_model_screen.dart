@@ -1,6 +1,11 @@
 ﻿import 'package:flutter/material.dart';
 import '../models/product_model.dart';
+import '../../../shared/api/api_exception.dart';
+import '../../../shared/api/backend_api.dart';
 import '../../../shared/widgets/custom_app_bar.dart';
+
+const _kEditStatusOptions = ['Latest', 'Active', 'Discontinued'];
+const _kEditApplianceTypes = ['Washer', 'Dryer', 'Styler', 'Payment System'];
 
 class EditProductModelScreen extends StatefulWidget {
   final ProductModel item;
@@ -14,61 +19,67 @@ class EditProductModelScreen extends StatefulWidget {
 }
 
 class _EditProductModelScreenState extends State<EditProductModelScreen> {
+  final _api = BackendApi();
   final _formKey = GlobalKey<FormState>();
 
   late final TextEditingController _nameController;
-  late final TextEditingController _codeController;
+  late final TextEditingController _modelCodeController;
+  late String? _selectedApplianceType;
+  late String _selectedStatus;
+
+  bool _saving = false;
 
   @override
   void initState() {
     super.initState();
-    _nameController = TextEditingController(text: widget.item.name);
-    // Show whichever code field is populated, falling back to modelCode
-    _codeController = TextEditingController(
-      text: widget.item.washerCode.isNotEmpty
-          ? widget.item.washerCode
-          : widget.item.dryerCode.isNotEmpty
-              ? widget.item.dryerCode
-              : widget.item.stylerCode.isNotEmpty
-                  ? widget.item.stylerCode
-                  : widget.item.modelCode,
-    );
+    _nameController = TextEditingController(text: widget.item.modelname);
+    _modelCodeController = TextEditingController(text: widget.item.modelCode);
+    // If the saved value isn't in the hardcoded list, fall back to null
+    _selectedApplianceType = _kEditApplianceTypes.contains(widget.item.applianceType)
+        ? widget.item.applianceType
+        : (widget.item.applianceType.isNotEmpty ? widget.item.applianceType : null);
+    _selectedStatus = widget.item.status.isNotEmpty ? widget.item.status : 'Latest';
   }
 
   @override
   void dispose() {
     _nameController.dispose();
-    _codeController.dispose();
+    _modelCodeController.dispose();
     super.dispose();
   }
 
-  String get _codeLabel {
-    if (widget.item.washerCode.isNotEmpty) return 'Washer Code';
-    if (widget.item.dryerCode.isNotEmpty) return 'Dryer Code';
-    if (widget.item.stylerCode.isNotEmpty) return 'Styler Code';
-    return 'Model Code';
-  }
-
-  void _saveChanges() {
+  Future<void> _saveChanges() async {
     if (!(_formKey.currentState?.validate() ?? false)) return;
+    if (_selectedApplianceType == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Please select a model type.')));
+      return;
+    }
 
-    final code = _codeController.text.trim();
-    final updated = widget.item.copyWith(
-      name: _nameController.text.trim(),
-      modelCode: widget.item.washerCode.isEmpty &&
-              widget.item.dryerCode.isEmpty &&
-              widget.item.stylerCode.isEmpty
-          ? code
-          : null,
-      washerCode:
-          widget.item.washerCode.isNotEmpty ? code : widget.item.washerCode,
-      dryerCode:
-          widget.item.dryerCode.isNotEmpty ? code : widget.item.dryerCode,
-      stylerCode:
-          widget.item.stylerCode.isNotEmpty ? code : widget.item.stylerCode,
-    );
-
-    Navigator.of(context).pop(updated);
+    setState(() => _saving = true);
+    try {
+      await _api.updateProductModel(
+        id: widget.item.id,
+        payload: {
+          'appliance_type': _selectedApplianceType!,
+          'modelname': _nameController.text.trim(),
+          'model_code': _modelCodeController.text.trim(),
+          'status': _selectedStatus,
+        },
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Updated successfully.')));
+        Navigator.of(context).pop(true);
+      }
+    } on ApiException catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(e.message)));
+      }
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
   }
 
   @override
@@ -78,16 +89,7 @@ class _EditProductModelScreenState extends State<EditProductModelScreen> {
       appBar: CustomAppBar(
         title: 'Inventory',
         showMenuButton: false,
-        actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 4),
-            child: IconButton(
-              icon: const Icon(Icons.account_circle_outlined,
-                  color: Colors.black87),
-              onPressed: () {},
-            ),
-          ),
-        ],
+        actions: const [],
       ),
       body: SafeArea(
         child: Form(
@@ -101,64 +103,79 @@ class _EditProductModelScreenState extends State<EditProductModelScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // â”€â”€ Heading â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
                       const Text(
                         'Edit Product Model',
                         style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w700,
-                          color: Colors.black87,
-                        ),
+                            fontSize: 18,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.black87),
                       ),
                       const SizedBox(height: 16),
 
-                      // â”€â”€ Model Name â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+                      // ── Select Model (appliance type) ────────────────────
+                      _FieldLabel('Select Model'),
+                      _buildApplianceTypeDropdown(),
+                      const SizedBox(height: 14),
+
+                      // ── Model Name ───────────────────────────────────────
                       _FieldLabel('Model Name'),
-                      _buildTextField(
+                      TextFormField(
                         controller: _nameController,
-                        hint: 'Enter Model Name',
+                        style: const TextStyle(
+                            fontSize: 13, color: Colors.black87),
                         validator: (v) =>
-                            (v?.isEmpty ?? true) ? 'Required' : null,
+                            (v?.trim().isEmpty ?? true) ? 'Required' : null,
+                        decoration: _inputDecoration('Enter Model Name'),
                       ),
                       const SizedBox(height: 14),
 
-                      // â”€â”€ Code field â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-                      _FieldLabel(_codeLabel),
-                      _buildTextField(
-                        controller: _codeController,
-                        hint: 'Enter $_codeLabel',
+                      // ── Washer Code ──────────────────────────────────────
+                      _FieldLabel('Washer Code'),
+                      TextFormField(
+                        controller: _modelCodeController,
+                        style: const TextStyle(
+                            fontSize: 13, color: Colors.black87),
+                        validator: (v) =>
+                            (v?.trim().isEmpty ?? true) ? 'Required' : null,
+                        decoration: _inputDecoration('Enter Washer Code'),
                       ),
+                      const SizedBox(height: 14),
 
+                      // ── Status ───────────────────────────────────────────
+                      _FieldLabel('Status'),
+                      _buildStatusDropdown(),
                       const SizedBox(height: 24),
                     ],
                   ),
                 ),
               ),
 
-              // â”€â”€ Save Changes button â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+              // ── Save Changes button ──────────────────────────────────────
               Padding(
                 padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
                 child: SizedBox(
                   width: double.infinity,
                   height: 50,
                   child: ElevatedButton(
-                    onPressed: _saveChanges,
+                    onPressed: _saving ? null : _saveChanges,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFFF5C518),
                       foregroundColor: Colors.white,
                       elevation: 0,
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
+                          borderRadius: BorderRadius.circular(8)),
                     ),
-                    child: const Text(
-                      'Save Changes',
-                      style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.white,
-                      ),
-                    ),
+                    child: _saving
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                                strokeWidth: 2, color: Colors.white))
+                        : const Text('Save Changes',
+                            style: TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.white)),
                   ),
                 ),
               ),
@@ -169,43 +186,84 @@ class _EditProductModelScreenState extends State<EditProductModelScreen> {
     );
   }
 
-  Widget _buildTextField({
-    required TextEditingController controller,
-    required String hint,
-    String? Function(String?)? validator,
-  }) {
-    return TextFormField(
-      controller: controller,
-      validator: validator,
-      style: const TextStyle(fontSize: 13, color: Colors.black87),
-      decoration: InputDecoration(
-        hintText: hint,
-        hintStyle: TextStyle(fontSize: 13, color: Colors.grey[400]),
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(6),
-          borderSide: const BorderSide(color: Color(0xFFD0D5DD)),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(6),
-          borderSide: const BorderSide(color: Color(0xFFD0D5DD)),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(6),
-          borderSide:
-              const BorderSide(color: Color(0xFF2563EB), width: 1.5),
-        ),
-        errorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(6),
-          borderSide: const BorderSide(color: Color(0xFFE74C3C)),
-        ),
-        focusedErrorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(6),
-          borderSide:
-              const BorderSide(color: Color(0xFFE74C3C), width: 1.5),
+  Widget _buildApplianceTypeDropdown() {
+    return Container(
+      height: 44,
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: const Color(0xFFD0D5DD)),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String>(
+          value: _selectedApplianceType,
+          isExpanded: true,
+          hint: Text('Select Model',
+              style: TextStyle(fontSize: 13, color: Colors.grey[500])),
+          icon: const Icon(Icons.keyboard_arrow_down,
+              color: Colors.black54, size: 20),
+          style: const TextStyle(fontSize: 13, color: Colors.black87),
+          items: _kEditApplianceTypes
+              .map((t) => DropdownMenuItem(value: t, child: Text(t)))
+              .toList(),
+          onChanged: (v) => setState(() => _selectedApplianceType = v),
         ),
       ),
+    );
+  }
+
+  Widget _buildStatusDropdown() {
+    final safeStatus = _kEditStatusOptions.contains(_selectedStatus)
+        ? _selectedStatus
+        : _kEditStatusOptions.first;
+    return Container(
+      height: 44,
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: const Color(0xFFD0D5DD)),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String>(
+          value: safeStatus,
+          isExpanded: true,
+          icon: const Icon(Icons.keyboard_arrow_down,
+              color: Colors.black54, size: 20),
+          style: const TextStyle(fontSize: 13, color: Colors.black87),
+          items: _kEditStatusOptions
+              .map((s) => DropdownMenuItem(value: s, child: Text(s)))
+              .toList(),
+          onChanged: (v) => setState(() => _selectedStatus = v ?? 'Latest'),
+        ),
+      ),
+    );
+  }
+
+  InputDecoration _inputDecoration(String hint) {
+    return InputDecoration(
+      hintText: hint,
+      hintStyle: TextStyle(fontSize: 13, color: Colors.grey[400]),
+      contentPadding:
+          const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+      border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(6),
+          borderSide: const BorderSide(color: Color(0xFFD0D5DD))),
+      enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(6),
+          borderSide: const BorderSide(color: Color(0xFFD0D5DD))),
+      focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(6),
+          borderSide:
+              const BorderSide(color: Color(0xFF2563EB), width: 1.5)),
+      errorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(6),
+          borderSide: const BorderSide(color: Color(0xFFE74C3C))),
+      focusedErrorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(6),
+          borderSide:
+              const BorderSide(color: Color(0xFFE74C3C), width: 1.5)),
     );
   }
 }
@@ -218,14 +276,11 @@ class _FieldLabel extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 6),
-      child: Text(
-        text,
-        style: const TextStyle(
-          fontSize: 13,
-          fontWeight: FontWeight.w500,
-          color: Colors.black87,
-        ),
-      ),
+      child: Text(text,
+          style: const TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+              color: Colors.black54)),
     );
   }
 }

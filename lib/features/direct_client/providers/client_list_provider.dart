@@ -84,7 +84,7 @@ class ClientListNotifier extends StateNotifier<ClientListState> {
   final BackendApi _api;
 
   /// Items per page — exposed so the build() method can reference it.
-  static const int perPage = 10;
+  static const int perPage = 5;
 
   /// Sequence counter — guards against stale responses from previous calls.
   int _seq = 0;

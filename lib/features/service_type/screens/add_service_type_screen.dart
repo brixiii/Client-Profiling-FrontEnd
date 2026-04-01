@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import '../models/service_type_model.dart';
+import '../../../shared/api/api_exception.dart';
+import '../../../shared/api/backend_api.dart';
 import '../../../shared/widgets/custom_app_bar.dart';
 
 /// Add a new Service Type.
@@ -12,8 +13,11 @@ class AddServiceTypeScreen extends StatefulWidget {
 }
 
 class _AddServiceTypeScreenState extends State<AddServiceTypeScreen> {
+  final _api = BackendApi();
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
+  String? _fieldError;
+  bool _submitting = false;
 
   @override
   void dispose() {
@@ -21,17 +25,34 @@ class _AddServiceTypeScreenState extends State<AddServiceTypeScreen> {
     super.dispose();
   }
 
-  void _submit() {
+  Future<void> _submit() async {
+    setState(() => _fieldError = null);
     if (!(_formKey.currentState?.validate() ?? false)) return;
 
-    final newItem = ServiceTypeModel(
-      id: DateTime.now().millisecondsSinceEpoch.toString(),
-      name: _nameController.text.trim(),
-      description: '',
-      price: 0,
-    );
-
-    Navigator.of(context).pop(newItem);
+    setState(() => _submitting = true);
+    try {
+      await _api.createServiceType(
+          setypename: _nameController.text.trim());
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Service type added successfully.')));
+        Navigator.of(context).pop(true);
+      }
+    } on ApiException catch (e) {
+      if (mounted) {
+        if (e.statusCode == 422 && e.fieldErrors.isNotEmpty) {
+          setState(() {
+            _fieldError = e.fieldErrors['setypename'] ?? e.message;
+          });
+          _formKey.currentState?.validate();
+        } else {
+          ScaffoldMessenger.of(context)
+              .showSnackBar(SnackBar(content: Text(e.message)));
+        }
+      }
+    } finally {
+      if (mounted) setState(() => _submitting = false);
+    }
   }
 
   @override
@@ -78,8 +99,16 @@ class _AddServiceTypeScreenState extends State<AddServiceTypeScreen> {
                       _FieldLabel('Service Type'),
                       TextFormField(
                         controller: _nameController,
-                        validator: (v) =>
-                            (v?.isEmpty ?? true) ? 'Required' : null,
+                        validator: (v) {
+                          if (v == null || v.trim().isEmpty) return 'Required';
+                          if (_fieldError != null) return _fieldError;
+                          return null;
+                        },
+                        onChanged: (_) {
+                          if (_fieldError != null) {
+                            setState(() => _fieldError = null);
+                          }
+                        },
                         decoration: _inputDecoration('Enter Service Type'),
                       ),
                     ],
@@ -92,7 +121,7 @@ class _AddServiceTypeScreenState extends State<AddServiceTypeScreen> {
                   width: double.infinity,
                   height: 50,
                   child: ElevatedButton(
-                    onPressed: _submit,
+                    onPressed: _submitting ? null : _submit,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFFF5A623),
                       foregroundColor: Colors.white,
@@ -101,11 +130,15 @@ class _AddServiceTypeScreenState extends State<AddServiceTypeScreen> {
                         borderRadius: BorderRadius.circular(10),
                       ),
                     ),
-                    child: const Text(
-                      'Submit',
-                      style: TextStyle(
-                          fontSize: 16, fontWeight: FontWeight.w600),
-                    ),
+                    child: _submitting
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                                strokeWidth: 2, color: Colors.white))
+                        : const Text('Submit',
+                            style: TextStyle(
+                                fontSize: 16, fontWeight: FontWeight.w600)),
                   ),
                 ),
                 const SizedBox(height: 20),

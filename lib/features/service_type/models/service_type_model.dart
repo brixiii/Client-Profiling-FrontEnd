@@ -1,27 +1,25 @@
 class ServiceTypeModel {
-  final String id;
-  final String name;
-  final String description;
-  final double price;
+  final int id;
+  final String setypename;
 
   const ServiceTypeModel({
     required this.id,
-    required this.name,
-    required this.description,
-    required this.price,
+    required this.setypename,
   });
 
-  ServiceTypeModel copyWith({
-    String? id,
-    String? name,
-    String? description,
-    double? price,
-  }) {
+  factory ServiceTypeModel.fromJson(Map<String, dynamic> json) {
+    return ServiceTypeModel(
+      id: json['id'] as int? ?? 0,
+      setypename: json['setypename']?.toString() ?? '',
+    );
+  }
+
+  Map<String, dynamic> toPayload() => {'setypename': setypename};
+
+  ServiceTypeModel copyWith({int? id, String? setypename}) {
     return ServiceTypeModel(
       id: id ?? this.id,
-      name: name ?? this.name,
-      description: description ?? this.description,
-      price: price ?? this.price,
+      setypename: setypename ?? this.setypename,
     );
   }
 }

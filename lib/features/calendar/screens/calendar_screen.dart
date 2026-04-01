@@ -17,7 +17,7 @@ class CalendarScreen extends StatefulWidget {
 
 class _CalendarScreenState extends State<CalendarScreen>
     with SingleTickerProviderStateMixin {
-  DateTime _currentMonth = DateTime(2026, 3, 1);
+  DateTime _currentMonth = DateTime(DateTime.now().year, DateTime.now().month, 1);
   final TextEditingController _nameController = TextEditingController();
   String _nameFilter = '';
   ScheduleType? _statusFilter;
@@ -186,6 +186,16 @@ class _CalendarScreenState extends State<CalendarScreen>
 
   /// Selects [client] as the active draggable and dismisses any open preview.
   void _selectClientForDrag(ScheduleEvent client, int fromDay) {
+    if (client.type == ScheduleType.resolved) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Resolved schedules cannot be moved.'),
+          backgroundColor: Color(0xFF27AE60),
+          duration: Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
     _previewController.stop();
     setState(() {
       _previewVisible = false;
@@ -201,14 +211,13 @@ class _CalendarScreenState extends State<CalendarScreen>
     });
   }
 
-  /// Moves [client] from its original day to [targetDay] in the events map.
-  void _dropClientOnDay(ScheduleEvent client, DateTime targetDay) {
-    if (_pendingDragFromDay == null) return;
+  /// Moves [client] from [fromDay] to [targetDay] in the events map.
+  void _dropClientOnDay(ScheduleEvent client, DateTime targetDay, int fromDay) {
     if (targetDay.month != _currentMonth.month) return;
     setState(() {
-      events[_pendingDragFromDay!]?.removeWhere((e) => e.id == client.id);
-      if (events[_pendingDragFromDay!]?.isEmpty ?? false) {
-        events.remove(_pendingDragFromDay!);
+      events[fromDay]?.removeWhere((e) => e.id == client.id);
+      if (events[fromDay]?.isEmpty ?? false) {
+        events.remove(fromDay);
       }
       events.putIfAbsent(targetDay.day, () => []).add(client);
       _pendingDragClient = null;
@@ -339,13 +348,14 @@ class _CalendarScreenState extends State<CalendarScreen>
                       ),
                       const SizedBox(height: 16),
                       Wrap(
-                        spacing: isMobile ? 10 : 20,
-                        runSpacing: 12,
+                        spacing: isMobile ? 6 : 10,
+                        runSpacing: 8,
                         children: [
                           _buildLegendItem('PENDING', const Color(0xFF5B9BD5), type: ScheduleType.pending),
                           _buildLegendItem('TENTATIVE', const Color(0xFFFFA500), type: ScheduleType.tentative),
                           _buildLegendItem('FINAL', const Color(0xFFE74C3C), type: ScheduleType.final_),
                           _buildLegendItem('RESOLVED', const Color(0xFF27AE60), type: ScheduleType.resolved),
+                          _buildLegendItem('*NAME', const Color(0xFF9E9E9E), type: ScheduleType.name),
                         ],
                       ),
                     ],
@@ -599,42 +609,65 @@ class _CalendarScreenState extends State<CalendarScreen>
                                 _selectedDay!.day == day.day &&
                                 _selectedDay!.month == day.month &&
                                 _selectedDay!.year == day.year;
-                            return DragTarget<ScheduleEvent>(
-                              onWillAccept: (data) =>
-                                  _pendingDragClient != null && isCurrentMonth,
-                              onAccept: (data) => _dropClientOnDay(data, day),
+                            final _todayNorm = DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day);
+                            final isPastDate = isCurrentMonth && DateTime(day.year, day.month, day.day).isBefore(_todayNorm);
+                            return DragTarget<_CalendarDragData>(
+                              onWillAccept: (data) => isCurrentMonth,
+                              onAccept: (data) {
+                                if (isPastDate) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text('Cannot move a schedule to a past date.'),
+                                      backgroundColor: Color(0xFFEF5350),
+                                      duration: Duration(seconds: 2),
+                                    ),
+                                  );
+                                } else {
+                                  _dropClientOnDay(data.event, day, data.fromDay);
+                                }
+                              },
                               builder: (ctx, candidateData, rejectedData) {
-                                final isDropTarget =
-                                    candidateData.isNotEmpty && isCurrentMonth;
+                                final hasCandidate = candidateData.isNotEmpty && isCurrentMonth;
+                                final isValidDropTarget = hasCandidate && !isPastDate;
+                                final isInvalidDropTarget = hasCandidate && isPastDate;
                                 return GestureDetector(
                                   onTap: () => _onDayTapped(day),
                                   child: AnimatedContainer(
                                     duration: const Duration(milliseconds: 180),
                                     curve: Curves.easeInOut,
                                     decoration: BoxDecoration(
-                                      color: isDropTarget
+                                      color: isValidDropTarget
                                           ? const Color(0xFF2563EB)
                                               .withOpacity(0.18)
-                                          : isSelected
-                                              ? const Color(0xFF2563EB)
-                                                  .withOpacity(0.06)
-                                              : isToday
-                                                  ? const Color(0xFF87CEEB)
-                                                      .withOpacity(0.05)
-                                                  : Colors.transparent,
+                                          : isInvalidDropTarget
+                                              ? const Color(0xFFEF5350)
+                                                  .withOpacity(0.15)
+                                              : isSelected
+                                                  ? const Color(0xFF2563EB)
+                                                      .withOpacity(0.06)
+                                                  : isToday
+                                                      ? const Color(0xFF87CEEB)
+                                                          .withOpacity(0.05)
+                                                      : Colors.transparent,
                                       border: Border(
                                         right: BorderSide(
-                                          color: isDropTarget
+                                          color: isValidDropTarget
                                               ? const Color(0xFF2563EB)
                                                   .withOpacity(0.35)
-                                              : Colors.grey[100]!,
+                                              : isInvalidDropTarget
+                                                  ? const Color(0xFFEF5350)
+                                                      .withOpacity(0.35)
+                                                  : Colors.grey[100]!,
                                           width: 0.5,
                                         ),
                                         bottom: BorderSide(
-                                          color: isDropTarget
+                                          color: isValidDropTarget
                                               ? const Color(0xFF2563EB)
                                                   .withOpacity(0.35)
-                                              : Colors.grey[100]!,
+                                              : isInvalidDropTarget
+                                                  ? const Color(0xFFEF5350)
+                                                      .withOpacity(0.35)
+                                                  : Colors.grey[100]!,
                                           width: 0.5,
                                         ),
                                       ),
@@ -696,9 +729,8 @@ class _CalendarScreenState extends State<CalendarScreen>
                                             ),
                                             child: Column(
                                               children: dayEvents
-                                                  .take(5)
                                                   .map((event) {
-                                                return Container(
+                                                final _card = Container(
                                                   margin: const EdgeInsets.only(
                                                       bottom: 3),
                                                   padding: const EdgeInsets
@@ -737,7 +769,7 @@ class _CalendarScreenState extends State<CalendarScreen>
                                                       const SizedBox(width: 3),
                                                       Expanded(
                                                         child: Text(
-                                                          event.name,
+                                                          event.displayName,
                                                           style: TextStyle(
                                                             fontSize: isNarrow
                                                                 ? 6.5
@@ -755,38 +787,55 @@ class _CalendarScreenState extends State<CalendarScreen>
                                                     ],
                                                   ),
                                                 );
+                                                if (event.type == ScheduleType.resolved) {
+                                                  return _card;
+                                                }
+                                                return LongPressDraggable<_CalendarDragData>(
+                                                  data: _CalendarDragData(
+                                                    event: event,
+                                                    fromDay: day.day,
+                                                  ),
+                                                  delay: const Duration(milliseconds: 200),
+                                                  feedback: Material(
+                                                    color: Colors.transparent,
+                                                    elevation: 6,
+                                                    borderRadius: BorderRadius.circular(6),
+                                                    child: Container(
+                                                      constraints: const BoxConstraints(maxWidth: 120),
+                                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                                                      decoration: BoxDecoration(
+                                                        color: event.color,
+                                                        borderRadius: BorderRadius.circular(6),
+                                                        boxShadow: [
+                                                          BoxShadow(
+                                                            color: event.color.withOpacity(0.5),
+                                                            blurRadius: 8,
+                                                            offset: const Offset(0, 3),
+                                                          ),
+                                                        ],
+                                                      ),
+                                                      child: Text(
+                                                        event.displayName,
+                                                        style: const TextStyle(
+                                                          fontSize: 10,
+                                                          color: Colors.white,
+                                                          fontWeight: FontWeight.w600,
+                                                        ),
+                                                        maxLines: 2,
+                                                        overflow: TextOverflow.ellipsis,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                  childWhenDragging: Opacity(
+                                                    opacity: 0.3,
+                                                    child: _card,
+                                                  ),
+                                                  child: _card,
+                                                );
                                               }).toList(),
                                             ),
                                           ),
                                         ),
-                                        if (dayEvents.length > 5)
-                                          Padding(
-                                            padding: const EdgeInsets.only(
-                                              bottom: 4,
-                                              left: 4,
-                                              right: 4,
-                                            ),
-                                            child: Container(
-                                              padding:
-                                                  const EdgeInsets.symmetric(
-                                                horizontal: 6,
-                                                vertical: 2,
-                                              ),
-                                              decoration: BoxDecoration(
-                                                color: Colors.grey[200],
-                                                borderRadius:
-                                                    BorderRadius.circular(8),
-                                              ),
-                                              child: Text(
-                                                '+${dayEvents.length - 5} more',
-                                                style: TextStyle(
-                                                  fontSize: isNarrow ? 6 : 7,
-                                                  color: Colors.grey[700],
-                                                  fontWeight: FontWeight.w600,
-                                                ),
-                                              ),
-                                            ),
-                                          ),
                                       ],
                                     ),
                                   ),
@@ -1046,7 +1095,7 @@ class _CalendarScreenState extends State<CalendarScreen>
             const SizedBox(width: 10),
             Expanded(
               child: Text(
-                event.name,
+                event.displayName,
                 style: const TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w500,
@@ -1360,8 +1409,11 @@ class _CalendarScreenState extends State<CalendarScreen>
               style: TextStyle(fontSize: 12, color: Colors.grey[500]),
             ),
             const SizedBox(height: 10),
-            Draggable<ScheduleEvent>(
-              data: client,
+            Draggable<_CalendarDragData>(
+              data: _CalendarDragData(
+                event: client,
+                fromDay: _pendingDragFromDay ?? 0,
+              ),
               feedback: Material(
                 elevation: 6,
                 borderRadius: BorderRadius.circular(8),
@@ -1388,7 +1440,7 @@ class _CalendarScreenState extends State<CalendarScreen>
                       const Icon(Icons.person, color: Colors.white, size: 14),
                       const SizedBox(width: 6),
                       Text(
-                        client.name,
+                        client.displayName,
                         style: const TextStyle(
                           color: Colors.white,
                           fontSize: 12,
@@ -1435,7 +1487,7 @@ class _CalendarScreenState extends State<CalendarScreen>
           ),
           const SizedBox(width: 8),
           Text(
-            client.name,
+            client.displayName,
             style: TextStyle(
               color: client.color,
               fontSize: 13,
@@ -1480,9 +1532,25 @@ class _CalendarScreenState extends State<CalendarScreen>
     );
   }
 
+  static const _legendTooltips = {
+    ScheduleType.pending:
+        'The schedule is not yet confirmed and is waiting for approval, customer confirmation, or resource availability before it can be set.',
+    ScheduleType.tentative:
+        'A provisional schedule that has been set but may still change depending on confirmation, availability, or other conditions.',
+    ScheduleType.final_:
+        'The schedule has been finalized and approved, and the activity or transaction is officially set to proceed on the specified date and time.',
+    ScheduleType.resolved:
+        'Marked as Resolved — event is locked from further changes.',
+    ScheduleType.name:
+        'Marked as the client opted to make the Back-end Set-up. Please exercise careful evaluation on the completeness of the materials needed, most especially the GAS FITTINGS.',
+  };
+
   Widget _buildLegendItem(String label, Color color, {ScheduleType? type}) {
     final isActive = type != null && _statusFilter == type;
-    return GestureDetector(
+    return Tooltip(
+      message: type != null ? (_legendTooltips[type] ?? '') : '',
+      preferBelow: true,
+      child: GestureDetector(
       onTap: type == null
           ? null
           : () {
@@ -1493,7 +1561,7 @@ class _CalendarScreenState extends State<CalendarScreen>
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         curve: Curves.easeInOut,
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
         decoration: BoxDecoration(
           color: isActive ? color.withOpacity(0.2) : color.withOpacity(0.1),
           borderRadius: BorderRadius.circular(20),
@@ -1506,8 +1574,8 @@ class _CalendarScreenState extends State<CalendarScreen>
           mainAxisSize: MainAxisSize.min,
           children: [
             Container(
-              width: 10,
-              height: 10,
+              width: 8,
+              height: 8,
               decoration: BoxDecoration(
                 color: color,
                 shape: BoxShape.circle,
@@ -1520,11 +1588,11 @@ class _CalendarScreenState extends State<CalendarScreen>
                 ],
               ),
             ),
-            const SizedBox(width: 8),
+            const SizedBox(width: 5),
             Text(
               label,
               style: TextStyle(
-                fontSize: 11,
+                fontSize: 10,
                 fontWeight: isActive ? FontWeight.w700 : FontWeight.w600,
                 color: isActive ? color : Colors.grey[800],
                 letterSpacing: 0.2,
@@ -1533,8 +1601,17 @@ class _CalendarScreenState extends State<CalendarScreen>
           ],
         ),
       ),
-    );
+    ), // GestureDetector
+    ); // Tooltip
   }
+}
+
+// ── Drag data carrier ────────────────────────────────────────────────────────
+
+class _CalendarDragData {
+  final ScheduleEvent event;
+  final int fromDay;
+  const _CalendarDragData({required this.event, required this.fromDay});
 }
 
 // ── One-time drag guide dialog with fade+scale animation ─────────────────────

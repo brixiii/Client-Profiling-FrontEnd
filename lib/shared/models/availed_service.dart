@@ -11,6 +11,17 @@ class AvailedService {
   final int clientId;
   final int? shopId;
 
+  /// Parsed from `availed_service_serials` or `serials` relationship array.
+  /// Each entry is a serial number string (e.g. "SN-001").
+  final List<String> serialNumbersList;
+
+  /// Parsed from `serial_spare_parts` nested under each `availed_service_serial`.
+  /// Each entry: { 'name': String, 'quantity': int }
+  final List<Map<String, dynamic>> sparePartsList;
+
+  /// Parsed from `technicians` or `availed_service_employees` relationship array.
+  final List<String> technicianNames;
+
   const AvailedService({
     required this.id,
     required this.eventId,
@@ -23,9 +34,60 @@ class AvailedService {
     required this.employeeId,
     required this.clientId,
     required this.shopId,
+    this.serialNumbersList = const [],
+    this.sparePartsList = const [],
+    this.technicianNames = const [],
   });
 
   factory AvailedService.fromJson(Map<String, dynamic> json) {
+    // Parse serial numbers from the pivot relationship (list of serials).
+    // Laravel may return as 'availed_service_serials' or 'serials'.
+    final rawSerials = (json['availed_service_serials'] as List? ??
+        json['serials'] as List? ??
+        []);
+    final serialNumbersList = <String>[];
+    final sparePartsList = <Map<String, dynamic>>[];
+
+    for (final entry in rawSerials) {
+      if (entry is! Map) continue;
+      final snMap = entry['serial_number'] as Map?;
+      final snStr = snMap != null
+          ? _asString(snMap['serialnumber'])
+          : _asString(entry['serial_number_id']);
+      if (snStr.isNotEmpty) serialNumbersList.add(snStr);
+
+      // Spare parts nested under each serial (serial_spare_parts relation).
+      final rawSpareParts = (entry['serial_spare_parts'] as List? ??
+          entry['spare_parts'] as List? ??
+          []);
+      for (final sp in rawSpareParts) {
+        if (sp is! Map) continue;
+        final spMap = sp['spare_part'] as Map?;
+        final name = spMap != null
+            ? _asString(spMap['sparepartsname'])
+            : _asString(sp['sparepartsname'] ?? sp['spare_part_id']);
+        final qty = _asNullableInt(sp['quantity']) ?? 1;
+        if (name.isNotEmpty) {
+          sparePartsList.add({'name': name, 'quantity': qty});
+        }
+      }
+    }
+
+    // Parse technicians from 'technicians' (array of {efullname}) or
+    // 'availed_service_employees' (array of {employee: {efullname}}).
+    final rawTechs = (json['technicians'] as List? ??
+        json['availed_service_employees'] as List? ??
+        []);
+    final technicianNames = <String>[];
+    for (final t in rawTechs) {
+      if (t is! Map) continue;
+      final empMap = t['employee'] as Map?;
+      final name = empMap != null
+          ? _asString(empMap['efullname'])
+          : _asString(t['efullname'] ?? t['name']);
+      if (name.isNotEmpty) technicianNames.add(name);
+    }
+
     return AvailedService(
       id: _asInt(json['id']),
       eventId: _asNullableInt(json['event_id']),
@@ -33,11 +95,15 @@ class AvailedService {
       serviceDate: _asString(json['service_date']),
       image: _asString(json['image']),
       serialNumberId: _asString(json['serial_number_id']),
-      controlNumber: _asString(json['control_number']),
+      controlNumber: _asString(
+          json['control_number'] ?? json['service_order_report_no']),
       serviceTypeId: _asString(json['service_type_id']),
       employeeId: _asNullableInt(json['employee_id']),
       clientId: _asInt(json['client_id']),
       shopId: _asNullableInt(json['shop_id']),
+      serialNumbersList: serialNumbersList,
+      sparePartsList: sparePartsList,
+      technicianNames: technicianNames,
     );
   }
 

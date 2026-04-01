@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/services.dart';
@@ -10,6 +11,9 @@ import '../../../../../shared/models/availed_service.dart';
 import '../../../../../shared/models/employee.dart';
 import '../../../../../shared/models/product.dart';
 import '../../../../../shared/models/shop.dart';
+import '../../../../service_type/models/service_type_model.dart';
+import '../../../../serial_number/models/serial_number_model.dart';
+import '../../../../spare_parts/models/spare_part_model.dart';
 
 enum AddMode { client, product, service, shop }
 
@@ -68,6 +72,9 @@ class _AddButtonsScreenState extends State<AddButtonsScreen> {
   final _purchaseOrderController = TextEditingController();
   final _deliveryReceiptController = TextEditingController();
   final _serialNumberController = TextEditingController();
+  final List<TextEditingController> _productSerialControllers = [
+    TextEditingController()
+  ];
   DateTime? _contractDate;
   DateTime? _deliveryDate;
   DateTime? _installationDate;
@@ -89,16 +96,18 @@ class _AddButtonsScreenState extends State<AddButtonsScreen> {
   // ── Service controllers ──────────────────────────────────────────────────
   final _reportNoController = TextEditingController();
   String? _subType;
-  String? _chosenFileName;
+  PlatformFile? _pickedFile;
   final _serviceOrderReportNoController = TextEditingController();
   String? _serviceType;
-  String? _selectedSerialNumber;
-  String? _selectedSparePart;
-  final _serviceQuantityController = TextEditingController(text: '1');
   DateTime? _serviceDate;
   final List<String?> _selectedTechnicians = [null];
   final List<String> _technicianOptions = [];
   final _serviceNotesController = TextEditingController();
+  // Service — dynamic rows
+  final List<int?> _serviceSerialIds = [null];
+  final List<_SparePartRow> _serviceSparePartRows = [_SparePartRow()];
+  List<SerialNumberModel> _serialNumberModels = const [];
+  List<SparePartModel> _sparePartModels = const [];
 
   // ── UI option lists ──────────────────────────────────────────────────────
   final List<String> _modelNames = [];
@@ -110,7 +119,6 @@ class _AddButtonsScreenState extends State<AddButtonsScreen> {
   final List<String> _subTypes = [];
   final List<String> _serviceTypes = [];
   final List<String> _serialNumbers = [];
-  final List<String> _spareParts = [];
   static const List<String> _supplierTypeOptions = [
     'Bulla Crave',
     'Other',
@@ -136,11 +144,11 @@ class _AddButtonsScreenState extends State<AddButtonsScreen> {
     _purchaseOrderController.dispose();
     _deliveryReceiptController.dispose();
     _serialNumberController.dispose();
+    for (final c in _productSerialControllers) c.dispose();
     _laborPlanController.dispose();
     _productNotesController.dispose();
     _reportNoController.dispose();
     _serviceOrderReportNoController.dispose();
-    _serviceQuantityController.dispose();
     _serviceNotesController.dispose();
     _shopNameController.dispose();
     _shopAddressController.dispose();
@@ -161,87 +169,66 @@ class _AddButtonsScreenState extends State<AddButtonsScreen> {
     });
 
     try {
-      // Run all dependency fetches in parallel; each is isolated so a single
-      // failing endpoint does not prevent the others from loading.
-      final results = await Future.wait([
-        _api.getClients(page: 1, perPage: 100).catchError((_) =>
-            PaginatedResponse<Map<String, dynamic>>(
-                data: const [],
-                currentPage: 1,
-                perPage: 100,
-                total: 0,
-                lastPage: 1,
-                links: const [])),
-        _api.getEmployees(page: 1, perPage: 100).catchError((_) =>
-            PaginatedResponse<Employee>(
-                data: const [],
-                currentPage: 1,
-                perPage: 100,
-                total: 0,
-                lastPage: 1,
-                links: const [])),
-        _api.getShops(page: 1, perPage: 100).catchError((_) =>
-            PaginatedResponse<Shop>(
-                data: const [],
-                currentPage: 1,
-                perPage: 100,
-                total: 0,
-                lastPage: 1,
-                links: const [])),
-        _api.getProducts(page: 1, perPage: 200).catchError((_) =>
-            PaginatedResponse<Product>(
-                data: const [],
-                currentPage: 1,
-                perPage: 200,
-                total: 0,
-                lastPage: 1,
-                links: const [])),
-        _api.getApplianceModels(page: 1, perPage: 100).catchError((_) =>
-            PaginatedResponse<Map<String, dynamic>>(
-                data: const [],
-                currentPage: 1,
-                perPage: 100,
-                total: 0,
-                lastPage: 1,
-                links: const [])),
-        _api.getAvailedServices(page: 1, perPage: 200).catchError((_) =>
-            PaginatedResponse<AvailedService>(
-                data: const [],
-                currentPage: 1,
-                perPage: 200,
-                total: 0,
-                lastPage: 1,
-                links: const [])),
-        _api.getServiceTypes(page: 1, perPage: 100).catchError((_) =>
-            PaginatedResponse<Map<String, dynamic>>(
-                data: const [],
-                currentPage: 1,
-                perPage: 100,
-                total: 0,
-                lastPage: 1,
-                links: const [])),
-      ]);
+      // Start every future BEFORE awaiting any — runs all requests in parallel.
+      // Typed variables avoid the Future.wait List<Object> cast crash.
+      final empty_m = PaginatedResponse<Map<String, dynamic>>(
+          data: const [], currentPage: 1, perPage: 100, total: 0, lastPage: 1, links: const []);
+
+      final clientsFut = _api.getClients(page: 1, perPage: 100)
+          .catchError((_) => empty_m);
+      final employeesFut = _api.getEmployees(page: 1, perPage: 100)
+          .catchError((_) => PaginatedResponse<Employee>(
+              data: const [], currentPage: 1, perPage: 100, total: 0, lastPage: 1, links: const []));
+      final shopsFut = _api.getShops(page: 1, perPage: 100)
+          .catchError((_) => PaginatedResponse<Shop>(
+              data: const [], currentPage: 1, perPage: 100, total: 0, lastPage: 1, links: const []));
+      final productsFut = _api.getProducts(page: 1, perPage: 200)
+          .catchError((_) => PaginatedResponse<Product>(
+              data: const [], currentPage: 1, perPage: 200, total: 0, lastPage: 1, links: const []));
+      final applianceModelsFut = _api.getApplianceModels(page: 1, perPage: 100)
+          .catchError((_) => empty_m);
+      final availedServicesFut = _api.getAvailedServices(page: 1, perPage: 200)
+          .catchError((_) => PaginatedResponse<AvailedService>(
+              data: const [], currentPage: 1, perPage: 200, total: 0, lastPage: 1, links: const []));
+      final serviceTypesFut = _api.getServiceTypes(page: 1, perPage: 100)
+          .catchError((_) => PaginatedResponse<ServiceTypeModel>(
+              data: const [], currentPage: 1, perPage: 100, total: 0, lastPage: 1, links: const []));
+      final sparePartsFut = _api.fetchAllSpareParts()
+          .catchError((_) => <SparePartModel>[]);
+      final serialNumbersFut = _api
+          .getSerialNumbers(
+              page: 1,
+              perPage: 500)
+          .catchError((_) => PaginatedResponse<SerialNumberModel>(
+              data: const [], currentPage: 1, perPage: 500, total: 0, lastPage: 1, links: const []));
+
+      // Now await — all 9 calls are already in-flight at this point.
+      final clientsResp = await clientsFut;
+      final employeesResp = await employeesFut;
+      final shopsResp = await shopsFut;
+      final productsResp = await productsFut;
+      final applianceModelsResp = await applianceModelsFut;
+      final availedServicesResp = await availedServicesFut;
+      final serviceTypesResp = await serviceTypesFut;
+      final sparePartsResp = await sparePartsFut;
+      final serialNumbersResp = await serialNumbersFut;
 
       if (!mounted) return;
 
-      final clients =
-          (results[0] as PaginatedResponse<Map<String, dynamic>>).data;
-      final employees = (results[1] as PaginatedResponse<Employee>).data;
-      final shops = (results[2] as PaginatedResponse<Shop>).data;
-      final products = (results[3] as PaginatedResponse<Product>).data;
-      final applianceModels =
-          (results[4] as PaginatedResponse<Map<String, dynamic>>).data;
-      final availedServices =
-          (results[5] as PaginatedResponse<AvailedService>).data;
-      final serviceTypes =
-          (results[6] as PaginatedResponse<Map<String, dynamic>>).data;
+      final clients = clientsResp.data;
+      final employees = employeesResp.data;
+      final shops = shopsResp.data;
+      final products = productsResp.data;
+      final applianceModels = applianceModelsResp.data;
+      final availedServices = availedServicesResp.data;
+      final serviceTypes = serviceTypesResp.data;
       final validServiceTypeRows = serviceTypes
+          .map((s) => <String, dynamic>{'id': s.id.toString(), 'setypename': s.setypename})
           .where((row) {
             final serviceTypeName = row['setypename']?.toString().trim() ?? '';
             final id = row['id']?.toString().trim() ?? '';
             return serviceTypeName.isNotEmpty && id.isNotEmpty;
           })
-          .map((row) => Map<String, dynamic>.from(row))
           .toList();
 
       List<String> collectUnique(Iterable<String> values) {
@@ -384,12 +371,6 @@ class _AddButtonsScreenState extends State<AddButtonsScreen> {
         _shopType = _shopTypes.contains(_shopType)
             ? _shopType
             : (_shopTypes.isNotEmpty ? _shopTypes.first : null);
-        _selectedSerialNumber = _serialNumbers.contains(_selectedSerialNumber)
-            ? _selectedSerialNumber
-            : null;
-        _selectedSparePart = _spareParts.contains(_selectedSparePart)
-            ? _selectedSparePart
-            : null;
         _subType = _subTypes.contains(_subType) ? _subType : null;
 
         if (_serviceTypeRows.isNotEmpty) {
@@ -417,6 +398,14 @@ class _AddButtonsScreenState extends State<AddButtonsScreen> {
         } else {
           _serviceType = null;
         }
+
+        _serialNumberModels = serialNumbersResp.data;
+        // Defensive dedup by id — safety layer in case API returns
+        // overlapping pages (first occurrence wins).
+        final seenSpareIds = <int>{};
+        _sparePartModels = sparePartsResp
+            .where((m) => seenSpareIds.add(m.id))
+            .toList();
 
         _isLoadingDependencies = false;
       });
@@ -481,10 +470,16 @@ class _AddButtonsScreenState extends State<AddButtonsScreen> {
         }
         break;
       case AddMode.service:
-        if (currentStep == 0 && (_selectedServiceTypeId ?? '').trim().isEmpty) {
-          errors['service_type_id'] = 'Service type is required.';
+        if (currentStep == 0) {
+          if (_serviceOrderReportNoController.text.trim().isEmpty) {
+            errors['service_order_report_no'] =
+                'Service Order Report No. is required.';
+          }
+          if ((_selectedServiceTypeId ?? '').trim().isEmpty) {
+            errors['service_type_id'] = 'Service type is required.';
+          }
         }
-        if (currentStep == 1 && _serviceDate == null) {
+        if (currentStep == 2 && _serviceDate == null) {
           errors['service_date'] = 'Service date is required.';
         }
         break;
@@ -714,14 +709,45 @@ class _AddButtonsScreenState extends State<AddButtonsScreen> {
             const SizedBox(height: 12),
             Row(
               children: [
-                Expanded(
-                  child: _buildTextField(_serialNumberController,
-                      hint: 'Serial Number'),
+                const Expanded(
+                  child: Text(
+                    'Serial Numbers',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w500,
+                      color: Colors.black87,
+                    ),
+                  ),
                 ),
-                const SizedBox(width: 8),
-                _buildIconButton(Icons.add, () {}),
+                _buildIconButton(Icons.add, () {
+                  setState(() => _productSerialControllers
+                      .add(TextEditingController()));
+                }),
               ],
             ),
+            const SizedBox(height: 8),
+            ..._productSerialControllers.asMap().entries.map((entry) {
+              final i = entry.key;
+              final ctrl = entry.value;
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Row(
+                  children: [
+                    Expanded(
+                        child: _buildTextField(ctrl,
+                            hint: 'Serial Number')),
+                    if (_productSerialControllers.length > 1) ...[
+                      const SizedBox(width: 8),
+                      _buildRedRemoveButton(() {
+                        ctrl.dispose();
+                        setState(
+                            () => _productSerialControllers.removeAt(i));
+                      }),
+                    ],
+                  ],
+                ),
+              );
+            }),
           ],
         );
       case 2:
@@ -761,15 +787,17 @@ class _AddButtonsScreenState extends State<AddButtonsScreen> {
 
   Widget addServicesDetails() {
     switch (currentStep) {
+      // ── Step 1: File · Report No. · Service Type ─────────────────────────
       case 0:
         return Column(
           children: [
-            // Choose File button
             InkWell(
               onTap: () async {
-                final result = await FilePicker.platform.pickFiles();
+                final result = await FilePicker.platform.pickFiles(
+                  withData: true,
+                );
                 if (result != null && result.files.isNotEmpty) {
-                  setState(() => _chosenFileName = result.files.single.name);
+                  setState(() => _pickedFile = result.files.single);
                 }
               },
               child: Container(
@@ -784,10 +812,10 @@ class _AddButtonsScreenState extends State<AddButtonsScreen> {
                   children: [
                     Expanded(
                       child: Text(
-                        _chosenFileName ?? 'Choose File',
+                        _pickedFile?.name ?? 'Choose File',
                         style: TextStyle(
                           fontSize: 14,
-                          color: _chosenFileName != null
+                          color: _pickedFile != null
                               ? Colors.black87
                               : Colors.grey[400],
                         ),
@@ -799,50 +827,191 @@ class _AddButtonsScreenState extends State<AddButtonsScreen> {
               ),
             ),
             const SizedBox(height: 12),
-            _buildDropdown('Sub Type', _subType, _subTypes,
-                (v) => setState(() => _subType = v)),
-            const SizedBox(height: 12),
-            _buildTextField(_serviceOrderReportNoController,
-                hint: 'Service Order Report No.'),
-            const SizedBox(height: 12),
-            _buildDropdown('Select Service Type', _serviceType, _serviceTypes,
-                (v) {
-              setState(() {
-                _serviceType = v;
-                final idx = _serviceTypes.indexOf(v ?? '');
-                if (idx >= 0 && idx < _serviceTypeRows.length) {
-                  _selectedServiceTypeId =
-                      _serviceTypeIdFromRow(_serviceTypeRows[idx]);
-                }
-              });
-            }, errorText: _fieldErrors['service_type_id']),
-          ],
-        );
-      case 1:
-        return Column(
-          children: [
-            _buildDropdown(
-                'Select Serial Number',
-                _selectedSerialNumber,
-                _serialNumbers,
-                (v) => setState(() => _selectedSerialNumber = v)),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: _buildDropdown(
-                      'Select Spare Part',
-                      _selectedSparePart,
-                      _spareParts,
-                      (v) => setState(() => _selectedSparePart = v)),
-                ),
-                const SizedBox(width: 8),
-                _buildIconButton(Icons.add, () {}),
-              ],
+            _buildTextField(
+              _serviceOrderReportNoController,
+              hint: 'Service Order Report No.',
+              errorText: _fieldErrors['service_order_report_no'],
             ),
             const SizedBox(height: 12),
-            _buildSpinnerField('Quantity', _serviceQuantityController),
-            const SizedBox(height: 12),
+            _buildDropdown(
+              'Select Service Type',
+              _serviceType,
+              _serviceTypes,
+              (v) {
+                setState(() {
+                  _serviceType = v;
+                  final idx = _serviceTypes.indexOf(v ?? '');
+                  if (idx >= 0 && idx < _serviceTypeRows.length) {
+                    _selectedServiceTypeId =
+                        _serviceTypeIdFromRow(_serviceTypeRows[idx]);
+                  }
+                });
+              },
+              errorText: _fieldErrors['service_type_id'],
+            ),
+          ],
+        );
+
+      // ── Step 2: Serial Numbers · Spare Parts ─────────────────────────────
+      case 1:
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Align(
+              alignment: Alignment.centerRight,
+              child: OutlinedButton(
+                onPressed: () =>
+                    setState(() => _serviceSerialIds.add(null)),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.black87,
+                  side: BorderSide(color: Colors.grey[400]!),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 14, vertical: 10),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8)),
+                ),
+                child: const Text('+ Add More Serial Number',
+                    style: TextStyle(fontSize: 12)),
+              ),
+            ),
+            const SizedBox(height: 10),
+            ..._serviceSerialIds.asMap().entries.map((entry) {
+              final i = entry.key;
+              final selectedId = entry.value;
+              final usedIds = _serviceSerialIds
+                  .whereType<int>()
+                  .where((id) => id != selectedId)
+                  .toSet();
+              final _seenSerials = <String>{};
+              final available = _serialNumberModels
+                  .where((m) =>
+                      !usedIds.contains(m.id) &&
+                      _seenSerials.add(m.serialnumber))
+                  .toList();
+              final selectedName = _serialNumberModels
+                  .cast<SerialNumberModel?>()
+                  .firstWhere((m) => m?.id == selectedId,
+                      orElse: () => null)
+                  ?.serialnumber;
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: _buildDropdown(
+                  'Select Serial Number',
+                  selectedName,
+                  available.map((m) => m.serialnumber).toList(),
+                  (v) => setState(() {
+                    final model = _serialNumberModels
+                        .cast<SerialNumberModel?>()
+                        .firstWhere(
+                            (m) => m?.serialnumber == v,
+                            orElse: () => null);
+                    _serviceSerialIds[i] = model?.id;
+                  }),
+                ),
+              );
+            }),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                const Text(
+                  'Spare Parts',
+                  style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.black87),
+                ),
+                const Spacer(),
+                _buildIconButton(
+                  Icons.add,
+                  () => setState(
+                      () => _serviceSparePartRows.add(_SparePartRow())),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            ..._serviceSparePartRows.asMap().entries.map((entry) {
+              final i = entry.key;
+              final row = entry.value;
+              final usedSpareIds = _serviceSparePartRows
+                  .asMap()
+                  .entries
+                  .where((e) => e.key != i && e.value.sparePartId != null)
+                  .map((e) => e.value.sparePartId!)
+                  .toSet();
+              final availableParts = _sparePartModels
+                  .where((m) => !usedSpareIds.contains(m.id))
+                  .toList();
+              final partIdError = _fieldErrors['spare_parts.$i.spare_part_id'];
+              final qtyError = _fieldErrors['spare_parts.$i.quantity']
+                  ?? _fieldErrors['spare_part_qty_$i'];
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _buildSparePartDropdown(
+                                row.sparePartId,
+                                availableParts,
+                                (id) => setState(() {
+                                  _serviceSparePartRows[i] = _SparePartRow(
+                                      sparePartId: id,
+                                      quantity: row.quantity);
+                                }),
+                              ),
+                              if (partIdError != null)
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 4),
+                                  child: Text(partIdError,
+                                      style: const TextStyle(
+                                          fontSize: 12,
+                                          color: Color(0xFFB91C1C))),
+                                ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        _buildRedRemoveButton(
+                          _serviceSparePartRows.length > 1
+                              ? () => setState(
+                                  () => _serviceSparePartRows.removeAt(i))
+                              : () => setState(() =>
+                                  _serviceSparePartRows[i] = _SparePartRow()),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    _buildIntSpinner(
+                      row.quantity,
+                      (val) => setState(() => _serviceSparePartRows[i] =
+                          _SparePartRow(
+                              sparePartId: row.sparePartId,
+                              quantity: val)),
+                    ),
+                    if (qtyError != null)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 4),
+                        child: Text(qtyError,
+                            style: const TextStyle(
+                                fontSize: 12, color: Color(0xFFB91C1C))),
+                      ),
+                  ],
+                ),
+              );
+            }),
+          ],
+        );
+
+      // ── Step 3: Service Date · Technicians ───────────────────────────────
+      case 2:
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
             _buildDateField('Service Date', _serviceDate,
                 (d) => setState(() => _serviceDate = d)),
             if (_fieldErrors['service_date'] != null)
@@ -855,25 +1024,6 @@ class _AddButtonsScreenState extends State<AddButtonsScreen> {
                 ),
               ),
             const SizedBox(height: 12),
-            Align(
-              alignment: Alignment.centerRight,
-              child: TextButton.icon(
-                onPressed: () {},
-                icon: const Icon(Icons.add, size: 14),
-                label: const Text('Add More Serial Number',
-                    style: TextStyle(fontSize: 12)),
-                style: TextButton.styleFrom(
-                  foregroundColor: const Color(0xFF2563EB),
-                  padding: EdgeInsets.zero,
-                ),
-              ),
-            ),
-          ],
-        );
-      case 2:
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
             ..._selectedTechnicians.asMap().entries.map((entry) {
               final i = entry.key;
               return Padding(
@@ -896,9 +1046,11 @@ class _AddButtonsScreenState extends State<AddButtonsScreen> {
             Align(
               alignment: Alignment.centerRight,
               child: TextButton.icon(
-                onPressed: () => setState(() => _selectedTechnicians.add(null)),
+                onPressed: () =>
+                    setState(() => _selectedTechnicians.add(null)),
                 icon: const Icon(Icons.add, size: 14),
-                label: const Text('+ Add More', style: TextStyle(fontSize: 12)),
+                label:
+                    const Text('+ Add More', style: TextStyle(fontSize: 12)),
                 style: TextButton.styleFrom(
                   foregroundColor: const Color(0xFF2563EB),
                   padding: EdgeInsets.zero,
@@ -907,9 +1059,12 @@ class _AddButtonsScreenState extends State<AddButtonsScreen> {
             ),
           ],
         );
+
+      // ── Step 4: Notes ─────────────────────────────────────────────────────
       case 3:
         return _buildTextField(_serviceNotesController,
             hint: 'Notes', maxLines: 7);
+
       default:
         return const SizedBox.shrink();
     }
@@ -1253,6 +1408,11 @@ class _AddButtonsScreenState extends State<AddButtonsScreen> {
         ];
         break;
       case AddMode.product:
+        final productSerialSummary = _productSerialControllers
+            .map((c) => c.text.trim())
+            .where((s) => s.isNotEmpty)
+            .toSet()
+            .join(', ');
         rows = [
           _summaryRow('Model Name', _modelName ?? '-'),
           _summaryRow('Supplier Type', _categoryType ?? '-'),
@@ -1270,16 +1430,60 @@ class _AddButtonsScreenState extends State<AddButtonsScreen> {
               _deliveryReceiptController.text.isEmpty
                   ? '-'
                   : _deliveryReceiptController.text),
+          _summaryRow(
+              'Serial Numbers',
+              productSerialSummary.isEmpty ? '-' : productSerialSummary),
         ];
         break;
       case AddMode.service:
+        final serialSummary = _serviceSerialIds.whereType<int>().isEmpty
+            ? '-'
+            : _serviceSerialIds
+                .whereType<int>()
+                .map((id) {
+                  return _serialNumberModels
+                          .cast<SerialNumberModel?>()
+                          .firstWhere((m) => m?.id == id,
+                              orElse: () => null)
+                          ?.serialnumber ??
+                      id.toString();
+                })
+                .join(', ');
+        final spareSummary = _serviceSparePartRows
+                .where((r) => r.sparePartId != null)
+                .isEmpty
+            ? '-'
+            : _serviceSparePartRows
+                .where((r) => r.sparePartId != null)
+                .map((r) {
+                  final name = _sparePartModels
+                          .cast<SparePartModel?>()
+                          .firstWhere((m) => m?.id == r.sparePartId,
+                              orElse: () => null)
+                          ?.sparepartsname ??
+                      r.sparePartId.toString();
+                  return '$name ×${r.quantity}';
+                })
+                .join(', ');
+        final techSummary = _selectedTechnicians.whereType<String>().isEmpty
+            ? '-'
+            : _selectedTechnicians.whereType<String>().join(', ');
         rows = [
-          _summaryRow('File', _chosenFileName ?? '-'),
-          _summaryRow('Sub Type', _subType ?? '-'),
+          _summaryRow('File', _pickedFile?.name ?? '-'),
+          _summaryRow(
+              'Service Order Report No.',
+              _serviceOrderReportNoController.text.isEmpty
+                  ? '-'
+                  : _serviceOrderReportNoController.text),
           _summaryRow('Service Type', _serviceType ?? '-'),
-          _summaryRow('Serial Number', _selectedSerialNumber ?? '-'),
-          _summaryRow('Spare Part', _selectedSparePart ?? '-'),
-          _summaryRow('Quantity', _serviceQuantityController.text),
+          _summaryRow('Serial Numbers', serialSummary),
+          _summaryRow('Spare Parts', spareSummary),
+          _summaryRow(
+              'Service Date',
+              _serviceDate != null
+                  ? _formatDate(_serviceDate) ?? '-'
+                  : '-'),
+          _summaryRow('Technicians', techSummary),
         ];
         break;
       case AddMode.shop:
@@ -1574,12 +1778,30 @@ class _AddButtonsScreenState extends State<AddButtonsScreen> {
     try {
       final createdProduct = await _api.createProduct(payload);
 
-      await _api.createShopProduct({
+      final createdShopProduct = await _api.createShopProduct({
         'shop_id': scopedShopId,
         'client_id': _resolveScopedClientId(),
         'product_id': createdProduct.id,
         'quantity': quantity < 1 ? 1 : quantity,
       });
+
+      // Submit serial numbers linked to this shop product.
+      final serialValues = _productSerialControllers
+          .map((c) => c.text.trim())
+          .where((s) => s.isNotEmpty)
+          .toSet()
+          .toList();
+      for (final sn in serialValues) {
+        try {
+          await _api.createSerialNumber({
+            'serialnumber': sn,
+            'client_id': _resolveScopedClientId(),
+            'shop_product_id': createdShopProduct.id,
+          });
+        } catch (_) {
+          // Non-fatal: product was created; skip duplicate/invalid serials.
+        }
+      }
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1632,24 +1854,53 @@ class _AddButtonsScreenState extends State<AddButtonsScreen> {
       _globalError = null;
     });
 
-    final payload = <String, dynamic>{
-      'notes': _serviceNotesController.text.trim().isEmpty
-          ? null
-          : _serviceNotesController.text.trim(),
-      'service_date': _formatDate(_serviceDate),
-      'image': _chosenFileName,
-      'serial_number_id': _selectedSerialNumber,
-      'control_number': _serviceOrderReportNoController.text.trim().isEmpty
-          ? null
-          : _serviceOrderReportNoController.text.trim(),
-      'service_type_id': (_selectedServiceTypeId ?? '').trim(),
-      'employee_id': _selectedEmployeeId,
-      'client_id': _resolveScopedClientId(),
-      'shop_id': _resolveScopedShopId(),
-    };
+    final serialNumberIds =
+        _serviceSerialIds.whereType<int>().toSet().toList();
+
+    final spareParts = _serviceSparePartRows
+        .where((r) => r.sparePartId != null)
+        .map((r) =>
+            <String, int>{'spare_part_id': r.sparePartId!, 'quantity': r.quantity})
+        .toList();
+
+    final technicianIds = _selectedTechnicians
+        .where((name) => name != null)
+        .map((name) {
+          return _employees
+              .cast<Employee?>()
+              .firstWhere(
+                (e) =>
+                    e != null &&
+                    (e.name.isNotEmpty
+                            ? e.name
+                            : 'Employee ${e.id}') ==
+                        name,
+                orElse: () => null,
+              )
+              ?.id;
+        })
+        .whereType<int>()
+        .toSet()
+        .toList();
 
     try {
-      await _api.createAvailedService(payload);
+      await _api.createAvailedServiceFull(
+        serviceOrderReportNo:
+            _serviceOrderReportNoController.text.trim(),
+        serviceTypeId: (_selectedServiceTypeId ?? '').trim(),
+        serviceDate: _formatDate(_serviceDate) ?? '',
+        notes: _serviceNotesController.text.trim().isEmpty
+            ? null
+            : _serviceNotesController.text.trim(),
+        filePath: kIsWeb ? null : _pickedFile?.path,
+        fileBytes: _pickedFile?.bytes,
+        fileName: _pickedFile?.name,
+        serialNumberIds: serialNumberIds,
+        spareParts: spareParts,
+        technicianIds: technicianIds,
+        clientId: _resolveScopedClientId() ?? 0,
+        shopId: _resolveScopedShopId(),
+      );
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1659,10 +1910,17 @@ class _AddButtonsScreenState extends State<AddButtonsScreen> {
     } on ApiException catch (e) {
       if (!mounted) return;
       _applyApiValidationErrors(e, fallbackMessage: 'Failed to add service.');
-    } catch (_) {
+    } catch (e, st) {
+      assert(() {
+        // ignore: avoid_print
+        print('[AddService] unexpected error: $e\n$st');
+        return true;
+      }());
       if (!mounted) return;
       setState(() {
-        _globalError = 'Failed to add service.';
+        _globalError = e.toString().isNotEmpty
+            ? e.toString()
+            : 'Failed to add service.';
       });
     } finally {
       if (mounted) {
@@ -1843,14 +2101,24 @@ class _AddButtonsScreenState extends State<AddButtonsScreen> {
 
   Map<String, String> _validateService() {
     final errors = <String, String>{};
-    if (_serviceDate == null) {
-      errors['service_date'] = 'Service date is required.';
+    if (_serviceOrderReportNoController.text.trim().isEmpty) {
+      errors['service_order_report_no'] =
+          'Service Order Report No. is required.';
     }
     if ((_selectedServiceTypeId ?? '').trim().isEmpty) {
       errors['service_type_id'] = 'Service type is required.';
     }
+    if (_serviceDate == null) {
+      errors['service_date'] = 'Service date is required.';
+    }
     if (_resolveScopedClientId() == null) {
       errors['client_id'] = 'Client is required.';
+    }
+    for (int i = 0; i < _serviceSparePartRows.length; i++) {
+      if (_serviceSparePartRows[i].sparePartId != null &&
+          _serviceSparePartRows[i].quantity < 1) {
+        errors['spare_part_qty_$i'] = 'Quantity must be at least 1.';
+      }
     }
     return errors;
   }
@@ -2090,6 +2358,41 @@ class _AddButtonsScreenState extends State<AddButtonsScreen> {
       {String? errorText}) {
     final safeValue = items.contains(value) ? value : null;
 
+    // Flutter disables DropdownButton internally when items is empty
+    // (items.isNotEmpty is part of _enabled). Render a plain placeholder
+    // instead so the container always looks consistent.
+    Widget dropdownChild;
+    if (items.isEmpty) {
+      dropdownChild = SizedBox(
+        height: 48,
+        child: Align(
+          alignment: Alignment.centerLeft,
+          child: Text(
+            _isLoadingDependencies ? 'Loading…' : hint,
+            style: TextStyle(color: Colors.grey[400], fontSize: 14),
+          ),
+        ),
+      );
+    } else {
+      dropdownChild = DropdownButtonHideUnderline(
+        child: DropdownButton<String>(
+          value: safeValue,
+          isExpanded: true,
+          hint: Text(hint,
+              style: TextStyle(color: Colors.grey[400], fontSize: 14)),
+          items: items
+              .map((item) => DropdownMenuItem(
+                    value: item,
+                    child: Text(item,
+                        style: const TextStyle(
+                            fontSize: 14, color: Colors.black87)),
+                  ))
+              .toList(),
+          onChanged: onChanged,
+        ),
+      );
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -2103,23 +2406,7 @@ class _AddButtonsScreenState extends State<AddButtonsScreen> {
                     ? Colors.grey[300]!
                     : const Color(0xFFB91C1C)),
           ),
-          child: DropdownButtonHideUnderline(
-            child: DropdownButton<String>(
-              value: safeValue,
-              isExpanded: true,
-              hint: Text(hint,
-                  style: TextStyle(color: Colors.grey[400], fontSize: 14)),
-              items: items
-                  .map((item) => DropdownMenuItem(
-                        value: item,
-                        child: Text(item,
-                            style: const TextStyle(
-                                fontSize: 14, color: Colors.black87)),
-                      ))
-                  .toList(),
-              onChanged: onChanged,
-            ),
-          ),
+          child: dropdownChild,
         ),
         if (errorText != null && errorText.trim().isNotEmpty)
           Padding(
@@ -2130,6 +2417,74 @@ class _AddButtonsScreenState extends State<AddButtonsScreen> {
             ),
           ),
       ],
+    );
+  }
+
+  /// Dropdown for spare parts that uses [SparePartModel.id] as the item value
+  /// to avoid Flutter duplicates assertion when two parts share the same name.
+  /// Disambiguates duplicate names by appending "(qty: X)" in the label only.
+  Widget _buildSparePartDropdown(
+    int? selectedId,
+    List<SparePartModel> parts,
+    ValueChanged<int?> onChanged,
+  ) {
+    // Count how many times each name appears in the full list.
+    final nameCounts = <String, int>{};
+    for (final m in _sparePartModels) {
+      nameCounts[m.sparepartsname] = (nameCounts[m.sparepartsname] ?? 0) + 1;
+    }
+    String labelFor(SparePartModel m) {
+      if ((nameCounts[m.sparepartsname] ?? 1) > 1) {
+        return '${m.sparepartsname} (qty: ${m.spquantity})';
+      }
+      return m.sparepartsname;
+    }
+
+    final safeValue = parts.any((m) => m.id == selectedId) ? selectedId : null;
+    Widget dropdownChild;
+    if (parts.isEmpty) {
+      dropdownChild = SizedBox(
+        height: 48,
+        child: Align(
+          alignment: Alignment.centerLeft,
+          child: Text(
+            _isLoadingDependencies ? 'Loading…' : 'Select Spare Parts',
+            style: TextStyle(color: Colors.grey[400], fontSize: 14),
+          ),
+        ),
+      );
+    } else {
+      dropdownChild = DropdownButtonHideUnderline(
+        child: DropdownButton<int>(
+          value: safeValue,
+          isExpanded: true,
+          hint: Text('Select Spare Parts',
+              style: TextStyle(color: Colors.grey[400], fontSize: 14)),
+          items: (() {
+                    // Guard: ensure no duplicate ids reach DropdownButton.
+                    final seen = <int>{};
+                    return parts
+                        .where((m) => seen.add(m.id))
+                        .map((m) => DropdownMenuItem<int>(
+                              value: m.id,
+                              child: Text(labelFor(m),
+                                  style: const TextStyle(
+                                      fontSize: 14, color: Colors.black87)),
+                            ))
+                        .toList();
+                  })(),
+          onChanged: onChanged,
+        ),
+      );
+    }
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.grey[300]!),
+      ),
+      child: dropdownChild,
     );
   }
 
@@ -2244,6 +2599,71 @@ class _AddButtonsScreenState extends State<AddButtonsScreen> {
       ),
     );
   }
+
+  /// Red trash button used to remove a spare-part row.
+  Widget _buildRedRemoveButton(VoidCallback onTap) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        height: 48,
+        width: 48,
+        decoration: BoxDecoration(
+          color: const Color(0xFFEF4444),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: const Icon(Icons.delete_outline,
+            size: 20, color: Colors.white),
+      ),
+    );
+  }
+
+  /// Value-based integer spinner — no TextEditingController needed.
+  Widget _buildIntSpinner(int value, ValueChanged<int> onChanged,
+      {int min = 1}) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.grey[300]!),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Padding(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              child: Text(
+                value.toString(),
+                style: const TextStyle(fontSize: 14, color: Colors.black87),
+              ),
+            ),
+          ),
+          Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              InkWell(
+                onTap: () => onChanged(value + 1),
+                child: const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                  child: Icon(Icons.keyboard_arrow_up, size: 18),
+                ),
+              ),
+              InkWell(
+                onTap: () {
+                  if (value > min) onChanged(value - 1);
+                },
+                child: const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                  child: Icon(Icons.keyboard_arrow_down, size: 18),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _ApplianceTypeMeta {
@@ -2251,4 +2671,13 @@ class _ApplianceTypeMeta {
   final String codeField;
 
   const _ApplianceTypeMeta(this.label, this.codeField);
+}
+
+/// Holds one spare-part row's selection state (mutable so validation can
+/// clear sparePartId when dependency data reloads).
+class _SparePartRow {
+  int? sparePartId;
+  int quantity;
+
+  _SparePartRow({this.sparePartId, this.quantity = 1});
 }

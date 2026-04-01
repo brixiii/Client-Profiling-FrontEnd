@@ -1,8 +1,10 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import '../../../shared/api/api_exception.dart';
 import '../../../shared/api/backend_api.dart';
 import '../../../shared/api/paginated_response.dart';
 import '../../../shared/models/shop.dart';
+import '../../service_type/models/service_type_model.dart';
 
 const List<String> _kStatuses = [
   'Pending',
@@ -108,30 +110,16 @@ class _AddScheduleDialogState extends State<_AddScheduleDialog> {
   Future<void> _loadDeps() async {
     setState(() => _isLoadingDeps = true);
     try {
-      final results = await Future.wait([
-        _api.getServiceTypes(page: 1, perPage: 100).catchError((_) =>
-            PaginatedResponse<Map<String, dynamic>>(
-                data: const [],
-                currentPage: 1,
-                perPage: 100,
-                total: 0,
-                lastPage: 1,
-                links: const [])),
-        _api.getCalendarEmployees(page: 1, perPage: 100).catchError((_) =>
-            PaginatedResponse<Map<String, dynamic>>(
-                data: const [],
-                currentPage: 1,
-                perPage: 100,
-                total: 0,
-                lastPage: 1,
-                links: const [])),
-      ]);
+      final stRespFuture = _api.getServiceTypes(page: 1, perPage: 100);
+      final empRespFuture = _api.getCalendarEmployees(page: 1, perPage: 100);
+      final PaginatedResponse<ServiceTypeModel> stResp = await stRespFuture;
+      final PaginatedResponse<Map<String, dynamic>> empResp = await empRespFuture;
       if (!mounted) return;
       setState(() {
-        _serviceTypes =
-            (results[0] as PaginatedResponse<Map<String, dynamic>>).data;
-        _employees =
-            (results[1] as PaginatedResponse<Map<String, dynamic>>).data;
+        _serviceTypes = stResp.data
+            .map((s) => <String, dynamic>{'id': s.id, 'setypename': s.setypename})
+            .toList();
+        _employees = empResp.data;
         _isLoadingDeps = false;
       });
     } catch (_) {
@@ -328,6 +316,7 @@ class _AddScheduleDialogState extends State<_AddScheduleDialog> {
         'pin_location': _pinLocationCtrl.text.trim(),
       if (_notesCtrl.text.trim().isNotEmpty) 'notes': _notesCtrl.text.trim(),
       if (techIds.isNotEmpty) 'technician_ids': techIds,
+      if (!_useDefault) 'event_mark': 'asterisk',
     };
 
     setState(() => _isSaving = true);
@@ -343,12 +332,17 @@ class _AddScheduleDialogState extends State<_AddScheduleDialog> {
           behavior: SnackBarBehavior.floating,
         ),
       );
-    } catch (_) {
+    } catch (e) {
       if (!mounted) return;
       setState(() => _isSaving = false);
+      final msg = e is ApiException
+          ? (e.fieldErrors.isNotEmpty
+              ? e.fieldErrors.values.join('\n')
+              : e.message)
+          : e.toString();
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Failed to save schedule.'),
+        SnackBar(
+          content: Text(msg.isNotEmpty ? msg : 'Failed to save schedule.'),
           backgroundColor: Colors.red,
           behavior: SnackBarBehavior.floating,
         ),
@@ -1052,6 +1046,7 @@ class _AddScheduleDialogState extends State<_AddScheduleDialog> {
     final techNames = _employees
         .map((e) => _asString(e['efullname']))
         .where((n) => n.isNotEmpty)
+        .toSet()
         .toList();
 
     return Row(

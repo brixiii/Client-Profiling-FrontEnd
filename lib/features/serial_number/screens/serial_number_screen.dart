@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import '../models/serial_number_model.dart';
+import '../../../shared/api/api_exception.dart';
+import '../../../shared/api/backend_api.dart';
 import '../../../shared/widgets/app_drawer.dart';
 import '../../../shared/widgets/custom_app_bar.dart';
 import 'serial_number_detail_screen.dart';
@@ -12,89 +15,93 @@ class SerialNumberScreen extends StatefulWidget {
 }
 
 class _SerialNumberScreenState extends State<SerialNumberScreen> {
+  final _api = BackendApi();
   final TextEditingController _searchController = TextEditingController();
+
   String _searchQuery = '';
   int _currentPage = 1;
-  final int _itemsPerPage = 5;
+  static const int _itemsPerPage = 5;
 
-  final List<SerialNumberModel> _items = const [
-    SerialNumberModel(
-      id: '1',
-      clientName: 'Aaron Adam Nuqui',
-      clientType: 'Owner',
-      dateCreated: '175630252',
-      productModel: 'LG GIANT C MAX WASHER (CWG27MDCRB)',
-      serialCodes: ['419KWK529045', '419KWEL62236', '412KWJU2B26B'],
-    ),
-    SerialNumberModel(
-      id: '2',
-      clientName: 'Aaron De Leon',
-      clientType: 'Owner',
-      dateCreated: '175630253',
-      productModel: 'LG TWIN WASH (F2514NTGW)',
-      serialCodes: ['412KWVO0LB23', '412KWCFBLB27'],
-    ),
-    SerialNumberModel(
-      id: '3',
-      clientName: 'Aaron Paradero',
-      clientType: 'Owner',
-      dateCreated: '175630252',
-      productModel: 'LG GIANT C MAX WASHER (CWG27MDCRB)',
-      serialCodes: [
-        '419KWK529045',
-        '419KWEL62236',
-        '412KWJU2B26B',
-        '412KWVO0LB23',
-        '412KWCFBLB27',
-        '509KWPV15664',
-      ],
-    ),
-    SerialNumberModel(
-      id: '4',
-      clientName: 'Abby Rojas',
-      clientType: 'Owner',
-      dateCreated: '175630254',
-      productModel: 'LG FRONT LOAD (F1296QDP3)',
-      serialCodes: ['509KWPV15664'],
-    ),
-    SerialNumberModel(
-      id: '5',
-      clientName: 'AB Gregorio',
-      clientType: 'Owner',
-      dateCreated: '175630255',
-      productModel: 'LG TOP LOAD (T2108VSAM)',
-      serialCodes: ['412KWVO0LB23'],
-    ),
-    SerialNumberModel(
-      id: '6',
-      clientName: 'Ace Santos',
-      clientType: 'Owner',
-      dateCreated: '175630256',
-      productModel: 'LG TWIN WASH (F2514NTGW)',
-      serialCodes: ['419KWK529045'],
-    ),
-  ];
+  List<SerialNumberModel> _items = [];
+  bool _isLoading = true;
+  String? _error;
+  int _lastPage = 1;
+  int _total = 0;
 
-  List<SerialNumberModel> get _filtered => _items
-      .where((e) =>
-          e.clientName.toLowerCase().contains(_searchQuery.toLowerCase()) ||
-          e.clientType.toLowerCase().contains(_searchQuery.toLowerCase()))
-      .toList();
+  int _spAvailable = 0;
+  bool _spLoading = true;
 
-  List<SerialNumberModel> get _pageItems {
-    final start = (_currentPage - 1) * _itemsPerPage;
-    final end = (start + _itemsPerPage).clamp(0, _filtered.length);
-    if (start >= _filtered.length) return [];
-    return _filtered.sublist(start, end);
+  @override
+  void initState() {
+    super.initState();
+    _loadPage();
+    _loadSparePartsStats();
   }
-
-  int get _totalPages =>
-      (_filtered.length / _itemsPerPage).ceil().clamp(1, double.maxFinite).toInt();
 
   @override
   void dispose() {
     _searchController.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadPage() async {
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+
+    try {
+      final resp = await _api.getSerialNumbers(
+        page: _currentPage,
+        perPage: _itemsPerPage,
+        q: _searchQuery.isEmpty ? null : _searchQuery,
+      );
+      if (mounted) {
+        setState(() {
+          _items = resp.data;
+          _lastPage = resp.lastPage;
+          _total = resp.total;
+          _isLoading = false;
+        });
+      }
+    } on ApiException catch (e) {
+      if (mounted) {
+        setState(() {
+          _error = e.message;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _error = e.toString();
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _loadSparePartsStats() async {
+    try {
+      final resp = await _api.getSpareParts(page: 1, perPage: 1);
+      if (mounted) {
+        setState(() {
+          _spAvailable = resp.total;
+          _spLoading = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _spLoading = false);
+    }
+  }
+
+  String _formatDate(String raw) {
+    if (raw.isEmpty) return 'N/A';
+    try {
+      return DateFormat('MM/dd/yyyy').format(DateTime.parse(raw));
+    } catch (_) {
+      return raw;
+    }
   }
 
   @override
@@ -108,7 +115,6 @@ class _SerialNumberScreenState extends State<SerialNumberScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // ── Stat cards ─────────────────────────────────────────────
             Row(
               children: [
                 Expanded(
@@ -116,13 +122,15 @@ class _SerialNumberScreenState extends State<SerialNumberScreen> {
                 ),
                 const SizedBox(width: 12),
                 Expanded(
-                  child: _StatCard(label: 'Available\nSpare Parts', value: '1257'),
+                  child: _StatCard(
+                    label: 'Available\nSpare Parts',
+                    value: _spLoading ? '...' : '$_spAvailable',
+                  ),
                 ),
               ],
             ),
             const SizedBox(height: 28),
 
-            // ── Section heading ─────────────────────────────────────────
             const Text(
               'Serial Numbers',
               style: TextStyle(
@@ -133,7 +141,6 @@ class _SerialNumberScreenState extends State<SerialNumberScreen> {
             ),
             const SizedBox(height: 12),
 
-            // ── Search field ───────────────────────────────────────────
             SizedBox(
               width: 160,
               height: 36,
@@ -144,8 +151,8 @@ class _SerialNumberScreenState extends State<SerialNumberScreen> {
                   hintText: 'Search',
                   hintStyle:
                       const TextStyle(fontSize: 13, color: Colors.black38),
-                  contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 10, vertical: 8),
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                   filled: true,
                   fillColor: Colors.white,
                   border: OutlineInputBorder(
@@ -162,15 +169,17 @@ class _SerialNumberScreenState extends State<SerialNumberScreen> {
                         const BorderSide(color: Color(0xFF2563EB), width: 1.5),
                   ),
                 ),
-                onChanged: (v) => setState(() {
-                  _searchQuery = v;
-                  _currentPage = 1;
-                }),
+                onChanged: (v) {
+                  setState(() {
+                    _searchQuery = v;
+                    _currentPage = 1;
+                  });
+                  _loadPage();
+                },
               ),
             ),
             const SizedBox(height: 12),
 
-            // ── Table ──────────────────────────────────────────────────
             Container(
               decoration: BoxDecoration(
                 border: Border.all(color: const Color(0xFFCCCCCC), width: 1),
@@ -178,7 +187,6 @@ class _SerialNumberScreenState extends State<SerialNumberScreen> {
               ),
               child: Column(
                 children: [
-                  // Header row
                   Container(
                     decoration: const BoxDecoration(
                       color: Color(0xFFF9F9F9),
@@ -228,6 +236,26 @@ class _SerialNumberScreenState extends State<SerialNumberScreen> {
                               width: 1,
                               thickness: 1,
                               color: Color(0xFFCCCCCC)),
+                          Expanded(
+                            flex: 4,
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                  vertical: 12, horizontal: 8),
+                              child: const Text(
+                                'Date Created',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 13,
+                                  color: Colors.black87,
+                                ),
+                              ),
+                            ),
+                          ),
+                          const VerticalDivider(
+                              width: 1,
+                              thickness: 1,
+                              color: Color(0xFFCCCCCC)),
                           const SizedBox(
                             width: 80,
                             child: Padding(
@@ -251,8 +279,27 @@ class _SerialNumberScreenState extends State<SerialNumberScreen> {
                   const Divider(
                       height: 1, thickness: 1, color: Color(0xFFCCCCCC)),
 
-                  // Data rows
-                  if (_pageItems.isEmpty)
+                  if (_isLoading)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 28),
+                      child: Center(child: CircularProgressIndicator()),
+                    )
+                  else if (_error != null)
+                    Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        children: [
+                          Text(_error!,
+                              style: const TextStyle(
+                                  color: Colors.red, fontSize: 13)),
+                          const SizedBox(height: 8),
+                          TextButton(
+                              onPressed: _loadPage,
+                              child: const Text('Retry')),
+                        ],
+                      ),
+                    )
+                  else if (_items.isEmpty)
                     const Padding(
                       padding: EdgeInsets.symmetric(vertical: 24),
                       child: Center(
@@ -262,97 +309,122 @@ class _SerialNumberScreenState extends State<SerialNumberScreen> {
                       ),
                     )
                   else
-                    ...List.generate(_pageItems.length, (index) {
-                      final item = _pageItems[index];
-                      final isLast = index == _pageItems.length - 1;
+                    ...List.generate(_items.length, (index) {
+                      final item = _items[index];
+                      final isLast = index == _items.length - 1;
                       return Column(
                         children: [
                           IntrinsicHeight(
                             child: Row(
                               children: [
-                                  Expanded(
-                                    flex: 5,
-                                    child: Padding(
-                                      padding: const EdgeInsets.symmetric(
-                                          vertical: 14, horizontal: 8),
-                                      child: Text(
-                                        item.clientName,
-                                        textAlign: TextAlign.center,
-                                        style: const TextStyle(
+                                Expanded(
+                                  flex: 5,
+                                  child: Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                        vertical: 14, horizontal: 8),
+                                    child: Text(
+                                      item.clientName.isEmpty
+                                          ? 'N/A'
+                                          : item.clientName,
+                                      textAlign: TextAlign.center,
+                                      style: const TextStyle(
                                           fontSize: 13,
-                                          color: Colors.black87,
-                                        ),
-                                      ),
+                                          color: Colors.black87),
                                     ),
                                   ),
-                                  const VerticalDivider(
-                                      width: 1,
-                                      thickness: 1,
-                                      color: Color(0xFFCCCCCC)),
-                                  Expanded(
-                                    flex: 4,
-                                    child: Padding(
-                                      padding: const EdgeInsets.symmetric(
-                                          vertical: 14, horizontal: 8),
-                                      child: Text(
-                                        item.clientType,
-                                        textAlign: TextAlign.center,
-                                        style: const TextStyle(
+                                ),
+                                const VerticalDivider(
+                                    width: 1,
+                                    thickness: 1,
+                                    color: Color(0xFFCCCCCC)),
+                                Expanded(
+                                  flex: 4,
+                                  child: Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                        vertical: 14, horizontal: 8),
+                                    child: Text(
+                                      item.supplierType.isEmpty
+                                          ? 'N/A'
+                                          : item.supplierType,
+                                      textAlign: TextAlign.center,
+                                      style: const TextStyle(
                                           fontSize: 13,
-                                          color: Colors.black87,
-                                        ),
-                                      ),
+                                          color: Colors.black87),
                                     ),
                                   ),
-                                  const VerticalDivider(
-                                      width: 1,
-                                      thickness: 1,
-                                      color: Color(0xFFCCCCCC)),
-                                  SizedBox(
-                                    width: 80,
-                                    child: Center(
-                                      child: OutlinedButton(
-                                        onPressed: () {
-                                          Navigator.of(context).push(
-                                            MaterialPageRoute(
-                                              builder: (_) =>
-                                                  SerialNumberDetailScreen(
-                                                      item: item),
+                                ),
+                                const VerticalDivider(
+                                    width: 1,
+                                    thickness: 1,
+                                    color: Color(0xFFCCCCCC)),
+                                Expanded(
+                                  flex: 4,
+                                  child: Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                        vertical: 14, horizontal: 8),
+                                    child: Text(
+                                      _formatDate(item.createdAt),
+                                      textAlign: TextAlign.center,
+                                      style: const TextStyle(
+                                          fontSize: 13,
+                                          color: Colors.black87),
+                                    ),
+                                  ),
+                                ),
+                                const VerticalDivider(
+                                    width: 1,
+                                    thickness: 1,
+                                    color: Color(0xFFCCCCCC)),
+                                SizedBox(
+                                  width: 80,
+                                  child: Center(
+                                    child: OutlinedButton(
+                                      onPressed: () async {
+                                        final changed = await Navigator.of(context)
+                                            .push<bool>(
+                                          MaterialPageRoute(
+                                            builder: (_) => SerialNumberDetailScreen(
+                                              serialId: item.id,
+                                              clientId: item.clientId,
                                             ),
-                                          );
-                                        },
-                                        style: OutlinedButton.styleFrom(
-                                          padding: const EdgeInsets.symmetric(
-                                              horizontal: 6, vertical: 4),
-                                          side: const BorderSide(
+                                          ),
+                                        );
+                                        if (changed == true) {
+                                          _loadPage();
+                                        }
+                                      },
+                                      style: OutlinedButton.styleFrom(
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 6, vertical: 4),
+                                        side: const BorderSide(
+                                            color: Color(0xFF2563EB)),
+                                        shape: RoundedRectangleBorder(
+                                            borderRadius:
+                                                BorderRadius.circular(4)),
+                                      ),
+                                      child: Row(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.center,
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: const [
+                                          Icon(Icons.visibility_outlined,
+                                              size: 13,
                                               color: Color(0xFF2563EB)),
-                                          shape: RoundedRectangleBorder(
-                                              borderRadius:
-                                                  BorderRadius.circular(4)),
-                                        ),
-                                        child: Row(
-                                          mainAxisAlignment:
-                                              MainAxisAlignment.center,
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: const [
-                                            Icon(Icons.visibility_outlined,
-                                                size: 13,
-                                                color: Color(0xFF2563EB)),
-                                            SizedBox(width: 3),
-                                            Text('View',
-                                                style: TextStyle(
-                                                    fontSize: 11,
-                                                    color: Color(0xFF2563EB),
-                                                    fontWeight:
-                                                        FontWeight.w600)),
-                                          ],
-                                        ),
+                                          SizedBox(width: 3),
+                                          Text('View',
+                                              style: TextStyle(
+                                                  fontSize: 11,
+                                                  color: Color(0xFF2563EB),
+                                                  fontWeight:
+                                                      FontWeight.w600)),
+                                        ],
                                       ),
                                     ),
                                   ),
-                                ],
-                              ),
+                                ),
+                              ],
                             ),
+                          ),
                           if (!isLast)
                             const Divider(
                                 height: 1,
@@ -366,16 +438,15 @@ class _SerialNumberScreenState extends State<SerialNumberScreen> {
             ),
             const SizedBox(height: 10),
 
-            // ── Pagination footer ────────────────────────────────────
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  _filtered.isEmpty
+                  _total == 0
                       ? 'Showing 0 entries'
                       : 'Showing ${(_currentPage - 1) * _itemsPerPage + 1} to '
-                          '${(_currentPage * _itemsPerPage).clamp(1, _filtered.length)} '
-                          'of ${_filtered.length} entries',
+                          '${(_currentPage - 1) * _itemsPerPage + _items.length} '
+                          'of $_total entries',
                   style:
                       const TextStyle(fontSize: 11, color: Colors.black45),
                 ),
@@ -384,13 +455,19 @@ class _SerialNumberScreenState extends State<SerialNumberScreen> {
                     _PageButton(
                       icon: Icons.first_page,
                       onTap: _currentPage > 1
-                          ? () => setState(() => _currentPage = 1)
+                          ? () {
+                              setState(() => _currentPage = 1);
+                              _loadPage();
+                            }
                           : null,
                     ),
                     _PageButton(
                       icon: Icons.chevron_left,
                       onTap: _currentPage > 1
-                          ? () => setState(() => _currentPage -= 1)
+                          ? () {
+                              setState(() => _currentPage -= 1);
+                              _loadPage();
+                            }
                           : null,
                     ),
                     Container(
@@ -408,14 +485,20 @@ class _SerialNumberScreenState extends State<SerialNumberScreen> {
                     ),
                     _PageButton(
                       icon: Icons.chevron_right,
-                      onTap: _currentPage < _totalPages
-                          ? () => setState(() => _currentPage += 1)
+                      onTap: _currentPage < _lastPage
+                          ? () {
+                              setState(() => _currentPage += 1);
+                              _loadPage();
+                            }
                           : null,
                     ),
                     _PageButton(
                       icon: Icons.last_page,
-                      onTap: _currentPage < _totalPages
-                          ? () => setState(() => _currentPage = _totalPages)
+                      onTap: _currentPage < _lastPage
+                          ? () {
+                              setState(() => _currentPage = _lastPage);
+                              _loadPage();
+                            }
                           : null,
                     ),
                   ],
@@ -428,8 +511,6 @@ class _SerialNumberScreenState extends State<SerialNumberScreen> {
     );
   }
 }
-
-// ── Stat card ───────────────────────────────────────────────────────────────
 
 class _StatCard extends StatelessWidget {
   final String label;
@@ -462,8 +543,6 @@ class _StatCard extends StatelessWidget {
     );
   }
 }
-
-// ── Pagination button ───────────────────────────────────────────────────────
 
 class _PageButton extends StatelessWidget {
   final IconData icon;

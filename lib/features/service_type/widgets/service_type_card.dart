@@ -44,34 +44,15 @@ class ServiceTypeCard extends StatelessWidget {
           ),
           const SizedBox(width: 12),
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  item.name,
-                  style: const TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.black87,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  item.description,
-                  style: const TextStyle(fontSize: 13, color: Colors.black54),
-                ),
-              ],
+            child: Text(
+              item.setypename,
+              style: const TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+                color: Colors.black87,
+              ),
             ),
           ),
-          Text(
-            '₱${item.price.toStringAsFixed(0)}',
-            style: const TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-              color: Color(0xFF2563EB),
-            ),
-          ),
-          const SizedBox(width: 8),
           const Icon(Icons.chevron_right, color: Colors.black38),
         ],
       ),

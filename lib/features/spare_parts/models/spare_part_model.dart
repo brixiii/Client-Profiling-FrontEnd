@@ -1,45 +1,54 @@
 class SparePartModel {
-  final String id;
-  final String name;
-  final String partNumber;
-  final int stock;
-  final String unit;
-
-  // Fields shown in the image form screens
-  final int quantity;
+  final int id;
+  final String sparepartsname;
+  final String partnumber;
+  final int spquantity;
   final String date;
-  final String notes;
+  final String spnotes;
 
   const SparePartModel({
     required this.id,
-    required this.name,
-    required this.partNumber,
-    required this.stock,
-    required this.unit,
-    this.quantity = 0,
-    this.date = '',
-    this.notes = '',
+    required this.sparepartsname,
+    this.partnumber = '',
+    required this.spquantity,
+    required this.date,
+    this.spnotes = '',
   });
 
+  factory SparePartModel.fromJson(Map<String, dynamic> json) {
+    return SparePartModel(
+      id: (json['id'] as num).toInt(),
+      sparepartsname: json['sparepartsname'] as String? ?? '',
+      partnumber: json['partnumber'] as String? ?? '',
+      spquantity: (json['spquantity'] as num?)?.toInt() ?? 0,
+      date: json['date'] as String? ?? '',
+      spnotes: json['spnotes'] as String? ?? '',
+    );
+  }
+
+  Map<String, dynamic> toPayload() => {
+        'sparepartsname': sparepartsname,
+        'partnumber': partnumber,
+        'spquantity': spquantity,
+        'date': date,
+        'spnotes': spnotes,
+      };
+
   SparePartModel copyWith({
-    String? id,
-    String? name,
-    String? partNumber,
-    int? stock,
-    String? unit,
-    int? quantity,
+    int? id,
+    String? sparepartsname,
+    String? partnumber,
+    int? spquantity,
     String? date,
-    String? notes,
+    String? spnotes,
   }) {
     return SparePartModel(
       id: id ?? this.id,
-      name: name ?? this.name,
-      partNumber: partNumber ?? this.partNumber,
-      stock: stock ?? this.stock,
-      unit: unit ?? this.unit,
-      quantity: quantity ?? this.quantity,
+      sparepartsname: sparepartsname ?? this.sparepartsname,
+      partnumber: partnumber ?? this.partnumber,
+      spquantity: spquantity ?? this.spquantity,
       date: date ?? this.date,
-      notes: notes ?? this.notes,
+      spnotes: spnotes ?? this.spnotes,
     );
   }
 }
