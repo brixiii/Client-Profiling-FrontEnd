@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../models/schedule_event.dart';
+import '../../../shared/api/api_exception.dart';
 import '../../../shared/api/backend_api.dart';
 import '../../../shared/api/paginated_response.dart';
 import '../../../shared/models/shop.dart';
+import '../../../shared/session_flags.dart';
 import '../../../shared/widgets/custom_app_bar.dart';
 
 class DayClientsScreen extends StatefulWidget {
@@ -43,6 +45,19 @@ class _DayClientsScreenState extends State<DayClientsScreen> {
     super.initState();
     // Shallow copy so local mutations don't affect the caller's list directly.
     _clients = List.from(widget.clients);
+  }
+
+  // ─── Permission helper ────────────────────────────────────────────────────
+
+  /// Returns true if the current user may edit/move [client].
+  /// Super Admins can edit all schedules; others only their own.
+  bool _canEdit(ScheduleEvent client) {
+    if (SessionFlags.userRole == 'Super Admin') return true;
+    final me = SessionFlags.loggedInUser;
+    if (me == null) return false;
+    final cb = client.createdBy.trim();
+    if (cb.isEmpty) return false;
+    return cb == me.id.toString();
   }
 
   // ─── Edit modal ─────────────────────────────────────────────────────────────
@@ -291,6 +306,17 @@ class _DayClientsScreenState extends State<DayClientsScreen> {
                           // Move button — triggers drag-reschedule on Calendar
                           GestureDetector(
                             onTap: () {
+                              if (!_canEdit(client)) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text(
+                                        'You can only move schedules you created.'),
+                                    backgroundColor: Color(0xFFEF5350),
+                                    duration: Duration(seconds: 2),
+                                  ),
+                                );
+                                return;
+                              }
                               widget.onClientSelectForDrag
                                   ?.call(client, widget.date);
                               Navigator.pop(context);
@@ -298,7 +324,9 @@ class _DayClientsScreenState extends State<DayClientsScreen> {
                             child: Container(
                               padding: const EdgeInsets.all(6),
                               decoration: BoxDecoration(
-                                color: Colors.grey[50],
+                                color: _canEdit(client)
+                                    ? Colors.grey[50]
+                                    : Colors.grey[100],
                                 borderRadius: BorderRadius.circular(6),
                                 border: Border.all(
                                   color: Colors.grey[200]!,
@@ -307,18 +335,35 @@ class _DayClientsScreenState extends State<DayClientsScreen> {
                               child: Icon(
                                 Icons.open_with,
                                 size: 16,
-                                color: Colors.grey[500],
+                                color: _canEdit(client)
+                                    ? Colors.grey[500]
+                                    : Colors.grey[300],
                               ),
                             ),
                           ),
                           const SizedBox(width: 8),
                           // Edit icon — opens the status/date edit modal
                           GestureDetector(
-                            onTap: () => _showEditModal(context, index),
+                            onTap: () {
+                              if (!_canEdit(client)) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text(
+                                        'You can only edit schedules you created.'),
+                                    backgroundColor: Color(0xFFEF5350),
+                                    duration: Duration(seconds: 2),
+                                  ),
+                                );
+                                return;
+                              }
+                              _showEditModal(context, index);
+                            },
                             child: Container(
                               padding: const EdgeInsets.all(6),
                               decoration: BoxDecoration(
-                                color: Colors.grey[50],
+                                color: _canEdit(client)
+                                    ? Colors.grey[50]
+                                    : Colors.grey[100],
                                 borderRadius: BorderRadius.circular(6),
                                 border: Border.all(
                                   color: Colors.grey[200]!,
@@ -327,7 +372,9 @@ class _DayClientsScreenState extends State<DayClientsScreen> {
                               child: Icon(
                                 Icons.edit_outlined,
                                 size: 16,
-                                color: Colors.grey[500],
+                                color: _canEdit(client)
+                                    ? Colors.grey[500]
+                                    : Colors.grey[300],
                               ),
                             ),
                           ),
@@ -918,12 +965,16 @@ class _EditScheduleDialogState extends State<_EditScheduleDialog> {
                             await _api.deleteEvent(widget.client.id);
                             if (!mounted) return;
                             widget.onDelete();
-                          } catch (_) {
+                          } catch (e) {
                             if (!mounted) return;
                             setState(() => _isSaving = false);
+                            final msg = e is ApiException &&
+                                    e.statusCode == 403
+                                ? 'You do not have permission to delete this schedule.'
+                                : 'Failed to delete schedule.';
                             ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('Failed to delete schedule.'),
+                              SnackBar(
+                                content: Text(msg),
                                 backgroundColor: Colors.red,
                                 behavior: SnackBarBehavior.floating,
                               ),
@@ -1032,12 +1083,16 @@ class _EditScheduleDialogState extends State<_EditScheduleDialog> {
                               notes: _notesCtrl.text.trim(),
                             );
                             widget.onSave(updatedClient, _selectedDate);
-                          } catch (_) {
+                          } catch (e) {
                             if (!mounted) return;
                             setState(() => _isSaving = false);
+                            final msg = e is ApiException &&
+                                    e.statusCode == 403
+                                ? 'You do not have permission to edit this schedule.'
+                                : 'Failed to save schedule.';
                             ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('Failed to save schedule.'),
+                              SnackBar(
+                                content: Text(msg),
                                 backgroundColor: Colors.red,
                                 behavior: SnackBarBehavior.floating,
                               ),

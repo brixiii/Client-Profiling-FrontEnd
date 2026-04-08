@@ -1,5 +1,6 @@
 ﻿import 'package:flutter/material.dart';
 import '../../../shared/api/backend_api.dart';
+import '../../../shared/session_flags.dart';
 import '../../../shared/models/reseller.dart';
 import '../../../shared/models/reseller_product.dart';
 import '../../../shared/widgets/custom_app_bar.dart';
@@ -242,7 +243,7 @@ class _ResellerDetailScreenState extends State<ResellerDetailScreen> {
                             const SizedBox(width: 12),
                             Expanded(
                               child: ElevatedButton.icon(
-                                onPressed: _showDeleteConfirmation,
+                                onPressed: SessionFlags.userRole != 'Super Admin' ? null : _showDeleteConfirmation,
                                 icon: const Icon(Icons.delete_outline, size: 18),
                                 label: const Text('Delete'),
                                 style: ElevatedButton.styleFrom(
@@ -329,8 +330,8 @@ class _ResellerDetailScreenState extends State<ResellerDetailScreen> {
                           icon: const Icon(Icons.add_rounded, size: 16),
                           label: const Text('Add Product'),
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFFFF8C42),
-                            foregroundColor: Colors.white,
+                            backgroundColor: const Color(0xFFFFC300),
+                            foregroundColor: Colors.black,
                             padding: const EdgeInsets.symmetric(
                                 horizontal: 14, vertical: 10),
                             textStyle: const TextStyle(

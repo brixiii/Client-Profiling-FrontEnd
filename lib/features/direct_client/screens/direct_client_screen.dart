@@ -124,7 +124,6 @@ class _DirectClientScreenState extends ConsumerState<DirectClientScreen> {
   @override
   Widget build(BuildContext context) {
     final s = ref.watch(clientListProvider);
-    // Local aliases — keeps the rest of the build method identical.
     final _clients = s.clients;
     final _shops = s.shops;
     final _isLoadingClients = s.isLoading;

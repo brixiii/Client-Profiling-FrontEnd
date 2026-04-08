@@ -19,14 +19,20 @@ class _SerialNumberScreenState extends State<SerialNumberScreen> {
   final TextEditingController _searchController = TextEditingController();
 
   String _searchQuery = '';
-  int _currentPage = 1;
-  static const int _itemsPerPage = 5;
 
-  List<SerialNumberModel> _items = [];
+  // Client-side display pagination (5 unique clients per page)
+  static const int _displayPerPage = 5;
+  int _displayPage = 1;
+  List<SerialNumberModel> _uniqueItems = [];
+  Set<int> _seenClientIds = {};
+
+  // Backend fetch tracking
+  static const int _fetchPerPage = 50;
+  int _backendPage = 1;
+  int _backendLastPage = 1;
+
   bool _isLoading = true;
   String? _error;
-  int _lastPage = 1;
-  int _total = 0;
 
   int _spAvailable = 0;
   bool _spLoading = true;
@@ -34,7 +40,7 @@ class _SerialNumberScreenState extends State<SerialNumberScreen> {
   @override
   void initState() {
     super.initState();
-    _loadPage();
+    _loadInitial();
     _loadSparePartsStats();
   }
 
@@ -44,41 +50,58 @@ class _SerialNumberScreenState extends State<SerialNumberScreen> {
     super.dispose();
   }
 
-  Future<void> _loadPage() async {
+  Future<void> _loadInitial() async {
     setState(() {
+      _uniqueItems = [];
+      _seenClientIds = {};
+      _displayPage = 1;
+      _backendPage = 1;
+      _backendLastPage = 1;
       _isLoading = true;
       _error = null;
     });
+    await _fetchUntilEnough(1);
+  }
 
-    try {
-      final resp = await _api.getSerialNumbers(
-        page: _currentPage,
-        perPage: _itemsPerPage,
-        q: _searchQuery.isEmpty ? null : _searchQuery,
-      );
-      if (mounted) {
-        setState(() {
-          _items = resp.data;
-          _lastPage = resp.lastPage;
-          _total = resp.total;
-          _isLoading = false;
-        });
-      }
-    } on ApiException catch (e) {
-      if (mounted) {
-        setState(() {
-          _error = e.message;
-          _isLoading = false;
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _error = e.toString();
-          _isLoading = false;
-        });
+  Future<void> _fetchUntilEnough(int targetPage) async {
+    final needed = targetPage * _displayPerPage;
+    while (_uniqueItems.length < needed && _backendPage <= _backendLastPage) {
+      final err = await _fetchNextBackendPage();
+      if (err != null) {
+        if (mounted) setState(() { _error = err; _isLoading = false; });
+        return;
       }
     }
+    if (mounted) setState(() => _isLoading = false);
+  }
+
+  Future<String?> _fetchNextBackendPage() async {
+    try {
+      final resp = await _api.getSerialNumbers(
+        page: _backendPage,
+        perPage: _fetchPerPage,
+        q: _searchQuery.isEmpty ? null : _searchQuery,
+      );
+      _backendLastPage = resp.lastPage;
+      for (final item in resp.data) {
+        if (_seenClientIds.add(item.clientId)) {
+          _uniqueItems.add(item);
+        }
+      }
+      _backendPage++;
+      return null;
+    } on ApiException catch (e) {
+      return e.message;
+    } catch (e) {
+      return e.toString();
+    }
+  }
+
+  Future<void> _goToDisplayPage(int page) async {
+    if (_isLoading) return;
+    setState(() => _isLoading = true);
+    await _fetchUntilEnough(page);
+    if (mounted) setState(() => _displayPage = page);
   }
 
   Future<void> _loadSparePartsStats() async {
@@ -106,6 +129,14 @@ class _SerialNumberScreenState extends State<SerialNumberScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final _pStart = (_displayPage - 1) * _displayPerPage;
+    final _pEnd = (_pStart + _displayPerPage).clamp(0, _uniqueItems.length);
+    final pageItems = _uniqueItems.isEmpty
+        ? <SerialNumberModel>[]
+        : _uniqueItems.sublist(_pStart, _pEnd);
+    final hasNextPage = _uniqueItems.length > _displayPage * _displayPerPage ||
+        _backendPage <= _backendLastPage;
+
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: CustomAppBar(title: 'Inventory', showMenuButton: true),
@@ -170,11 +201,8 @@ class _SerialNumberScreenState extends State<SerialNumberScreen> {
                   ),
                 ),
                 onChanged: (v) {
-                  setState(() {
-                    _searchQuery = v;
-                    _currentPage = 1;
-                  });
-                  _loadPage();
+                  setState(() => _searchQuery = v);
+                  _loadInitial();
                 },
               ),
             ),
@@ -203,26 +231,6 @@ class _SerialNumberScreenState extends State<SerialNumberScreen> {
                                   vertical: 12, horizontal: 8),
                               child: const Text(
                                 'Client Name',
-                                textAlign: TextAlign.center,
-                                style: TextStyle(
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 13,
-                                  color: Colors.black87,
-                                ),
-                              ),
-                            ),
-                          ),
-                          const VerticalDivider(
-                              width: 1,
-                              thickness: 1,
-                              color: Color(0xFFCCCCCC)),
-                          Expanded(
-                            flex: 4,
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(
-                                  vertical: 12, horizontal: 8),
-                              child: const Text(
-                                'Client Type',
                                 textAlign: TextAlign.center,
                                 style: TextStyle(
                                   fontWeight: FontWeight.w600,
@@ -294,12 +302,12 @@ class _SerialNumberScreenState extends State<SerialNumberScreen> {
                                   color: Colors.red, fontSize: 13)),
                           const SizedBox(height: 8),
                           TextButton(
-                              onPressed: _loadPage,
+                              onPressed: _loadInitial,
                               child: const Text('Retry')),
                         ],
                       ),
                     )
-                  else if (_items.isEmpty)
+                  else if (_uniqueItems.isEmpty)
                     const Padding(
                       padding: EdgeInsets.symmetric(vertical: 24),
                       child: Center(
@@ -309,9 +317,9 @@ class _SerialNumberScreenState extends State<SerialNumberScreen> {
                       ),
                     )
                   else
-                    ...List.generate(_items.length, (index) {
-                      final item = _items[index];
-                      final isLast = index == _items.length - 1;
+                    ...List.generate(pageItems.length, (index) {
+                      final item = pageItems[index];
+                      final isLast = index == pageItems.length - 1;
                       return Column(
                         children: [
                           IntrinsicHeight(
@@ -326,26 +334,6 @@ class _SerialNumberScreenState extends State<SerialNumberScreen> {
                                       item.clientName.isEmpty
                                           ? 'N/A'
                                           : item.clientName,
-                                      textAlign: TextAlign.center,
-                                      style: const TextStyle(
-                                          fontSize: 13,
-                                          color: Colors.black87),
-                                    ),
-                                  ),
-                                ),
-                                const VerticalDivider(
-                                    width: 1,
-                                    thickness: 1,
-                                    color: Color(0xFFCCCCCC)),
-                                Expanded(
-                                  flex: 4,
-                                  child: Padding(
-                                    padding: const EdgeInsets.symmetric(
-                                        vertical: 14, horizontal: 8),
-                                    child: Text(
-                                      item.supplierType.isEmpty
-                                          ? 'N/A'
-                                          : item.supplierType,
                                       textAlign: TextAlign.center,
                                       style: const TextStyle(
                                           fontSize: 13,
@@ -380,17 +368,19 @@ class _SerialNumberScreenState extends State<SerialNumberScreen> {
                                   child: Center(
                                     child: OutlinedButton(
                                       onPressed: () async {
-                                        final changed = await Navigator.of(context)
-                                            .push<bool>(
+                                        final changed =
+                                            await Navigator.of(context)
+                                                .push<bool>(
                                           MaterialPageRoute(
-                                            builder: (_) => SerialNumberDetailScreen(
+                                            builder: (_) =>
+                                                SerialNumberDetailScreen(
                                               serialId: item.id,
                                               clientId: item.clientId,
                                             ),
                                           ),
                                         );
                                         if (changed == true) {
-                                          _loadPage();
+                                          _loadInitial();
                                         }
                                       },
                                       style: OutlinedButton.styleFrom(
@@ -442,11 +432,10 @@ class _SerialNumberScreenState extends State<SerialNumberScreen> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  _total == 0
+                  _uniqueItems.isEmpty
                       ? 'Showing 0 entries'
-                      : 'Showing ${(_currentPage - 1) * _itemsPerPage + 1} to '
-                          '${(_currentPage - 1) * _itemsPerPage + _items.length} '
-                          'of $_total entries',
+                      : 'Showing ${(_displayPage - 1) * _displayPerPage + 1}–'
+                          '${(_displayPage - 1) * _displayPerPage + pageItems.length} entries',
                   style:
                       const TextStyle(fontSize: 11, color: Colors.black45),
                 ),
@@ -454,20 +443,14 @@ class _SerialNumberScreenState extends State<SerialNumberScreen> {
                   children: [
                     _PageButton(
                       icon: Icons.first_page,
-                      onTap: _currentPage > 1
-                          ? () {
-                              setState(() => _currentPage = 1);
-                              _loadPage();
-                            }
+                      onTap: _displayPage > 1 && !_isLoading
+                          ? () => _goToDisplayPage(1)
                           : null,
                     ),
                     _PageButton(
                       icon: Icons.chevron_left,
-                      onTap: _currentPage > 1
-                          ? () {
-                              setState(() => _currentPage -= 1);
-                              _loadPage();
-                            }
+                      onTap: _displayPage > 1 && !_isLoading
+                          ? () => _goToDisplayPage(_displayPage - 1)
                           : null,
                     ),
                     Container(
@@ -478,27 +461,22 @@ class _SerialNumberScreenState extends State<SerialNumberScreen> {
                         borderRadius: BorderRadius.circular(4),
                       ),
                       child: Text(
-                        '$_currentPage',
+                        '$_displayPage',
                         style: const TextStyle(
                             fontSize: 12, fontWeight: FontWeight.w600),
                       ),
                     ),
                     _PageButton(
                       icon: Icons.chevron_right,
-                      onTap: _currentPage < _lastPage
-                          ? () {
-                              setState(() => _currentPage += 1);
-                              _loadPage();
-                            }
+                      onTap: hasNextPage && !_isLoading
+                          ? () => _goToDisplayPage(_displayPage + 1)
                           : null,
                     ),
                     _PageButton(
                       icon: Icons.last_page,
-                      onTap: _currentPage < _lastPage
-                          ? () {
-                              setState(() => _currentPage = _lastPage);
-                              _loadPage();
-                            }
+                      onTap: hasNextPage && !_isLoading
+                          ? () => _goToDisplayPage(
+                              (_uniqueItems.length / _displayPerPage).ceil())
                           : null,
                     ),
                   ],

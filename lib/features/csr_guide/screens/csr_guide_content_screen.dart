@@ -3,6 +3,7 @@ import '../../../shared/api/api_exception.dart';
 import '../../../shared/api/backend_api.dart';
 import '../../../shared/models/csr_guide_content.dart';
 import '../../../shared/models/csr_guide_section.dart';
+import '../../../shared/session_flags.dart';
 import '../../../shared/widgets/custom_app_bar.dart';
 
 // ── Content display screen ──────────────────────────────────────────────────
@@ -87,6 +88,7 @@ class _CsrGuideContentScreenState extends State<CsrGuideContentScreen> {
                         ),
                       ),
                     ),
+                    if (SessionFlags.userRole == 'Super Admin') ...[  
                     const SizedBox(width: 12),
                     ElevatedButton.icon(
                       onPressed: _openEditScreen,
@@ -105,6 +107,7 @@ class _CsrGuideContentScreenState extends State<CsrGuideContentScreen> {
                         ),
                       ),
                     ),
+                    ],
                   ],
                 ),
               ),

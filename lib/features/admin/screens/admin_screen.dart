@@ -215,8 +215,8 @@ class _AdminScreenState extends State<AdminScreen> {
                 icon: const Icon(Icons.add, size: 16),
                 label: const Text('Add Admin'),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF2563EB),
-                  foregroundColor: Colors.white,
+                  backgroundColor: const Color(0xFFFFC300),
+                  foregroundColor: Colors.black,
                   padding:
                       const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                   textStyle: const TextStyle(
@@ -324,8 +324,8 @@ class _AdminScreenState extends State<AdminScreen> {
                 icon: const Icon(Icons.add, size: 16),
                 label: const Text('Add Employee'),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF2563EB),
-                  foregroundColor: Colors.white,
+                  backgroundColor: const Color(0xFFFFC300),
+                  foregroundColor: Colors.black,
                   padding:
                       const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                   textStyle: const TextStyle(

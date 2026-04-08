@@ -81,6 +81,27 @@ class BackendApi {
     return User.fromJson(data);
   }
 
+  Future<User> updateProfile({
+    required String address,
+    required String phone,
+    required String email,
+  }) async {
+    final result = await _api.put('/profile', body: {
+      'address': address,
+      'phonenum': phone,
+      'email': email,
+    });
+    if (result is! Map<String, dynamic>) {
+      throw ApiException(statusCode: 500, message: 'Invalid profile update response.');
+    }
+    final data = result['user'] is Map<String, dynamic>
+        ? Map<String, dynamic>.from(result['user'])
+        : result['data'] is Map<String, dynamic>
+            ? Map<String, dynamic>.from(result['data'])
+            : Map<String, dynamic>.from(result);
+    return User.fromJson(data);
+  }
+
   /// Uploads a profile photo via multipart/form-data (mobile — uses file path).
   /// Returns the new absolute [profile_photo_url] on success.
   Future<String?> uploadProfilePhoto(String filePath) async {
@@ -140,6 +161,76 @@ class BackendApi {
       'total_services': (result['total_services'] as num?)?.toInt() ?? 0,
       'total_shops': (result['total_shops'] as num?)?.toInt() ?? 0,
     };
+  }
+
+  /// GET /dashboard/sold-products-monthly?year=YYYY
+  /// Returns a list of 12 integers (Jan–Dec monthly sold product counts).
+  Future<List<int>> getSoldProductsMonthly({int? year}) async {
+    final query = <String, dynamic>{};
+    if (year != null) query['year'] = year;
+    final result = await _api.get('/dashboard/sold-products-monthly', query: query);
+    if (result is List) {
+      return result.map<int>((e) => (e as num).toInt()).toList();
+    }
+    if (result is Map<String, dynamic> && result['data'] is List) {
+      return (result['data'] as List)
+          .map<int>((e) => (e as num).toInt())
+          .toList();
+    }
+    throw ApiException(statusCode: 500, message: 'Invalid sold-products-monthly response.');
+  }
+
+  /// GET /dashboard/services-breakdown
+  /// Returns a map of service category → count.
+  /// Example: { "Repair": 42, "Maintenance": 18, ... }
+  Future<Map<String, int>> getServicesBreakdown() async {
+    final result = await _api.get('/dashboard/services-breakdown');
+    if (result is Map<String, dynamic>) {
+      return result.map((k, v) => MapEntry(k, (v as num).toInt()));
+    }
+    if (result is Map<String, dynamic> && result['data'] is Map) {
+      return (result['data'] as Map<String, dynamic>)
+          .map((k, v) => MapEntry(k, (v as num).toInt()));
+    }
+    throw ApiException(statusCode: 500, message: 'Invalid services-breakdown response.');
+  }
+
+  /// GET /dashboard/top-products?limit=5
+  /// Returns a list of maps: [{ "name": "...", "count": 42 }, ...]
+  Future<List<Map<String, dynamic>>> getTopProducts({int limit = 5}) async {
+    final result = await _api.get('/dashboard/top-products', query: {'limit': limit});
+    List<dynamic> list;
+    if (result is List) {
+      list = result;
+    } else if (result is Map<String, dynamic> && result['data'] is List) {
+      list = result['data'] as List;
+    } else {
+      throw ApiException(statusCode: 500, message: 'Invalid top-products response.');
+    }
+    return list.map<Map<String, dynamic>>((e) {
+      final m = Map<String, dynamic>.from(e as Map);
+      // SUM() can return a String in some DB drivers – normalise to int
+      final raw = m['count'];
+      if (raw is String) m['count'] = int.tryParse(raw) ?? 0;
+      return m;
+    }).toList();
+  }
+
+  /// GET /dashboard/client-growth-monthly?year=YYYY
+  /// Returns a list of 12 integers (Jan–Dec new-client counts).
+  Future<List<int>> getClientGrowthMonthly({int? year}) async {
+    final query = <String, dynamic>{};
+    if (year != null) query['year'] = year;
+    final result = await _api.get('/dashboard/client-growth-monthly', query: query);
+    if (result is List) {
+      return result.map<int>((e) => (e as num).toInt()).toList();
+    }
+    if (result is Map<String, dynamic> && result['data'] is List) {
+      return (result['data'] as List)
+          .map<int>((e) => (e as num).toInt())
+          .toList();
+    }
+    throw ApiException(statusCode: 500, message: 'Invalid client-growth-monthly response.');
   }
 
   Future<void> logout() async {
@@ -308,6 +399,25 @@ class BackendApi {
     return _parsePage<Employee>(result, Employee.fromJson);
   }
 
+  Future<Employee> createEmployee(Map<String, dynamic> payload) async {
+    final result = await _api.post('/employees', body: payload);
+    final map = _unwrapSingle(result);
+    return Employee.fromJson(map);
+  }
+
+  Future<Employee> updateEmployee({
+    required int id,
+    required Map<String, dynamic> payload,
+  }) async {
+    final result = await _api.put('/employees/$id', body: payload);
+    final map = _unwrapSingle(result);
+    return Employee.fromJson(map);
+  }
+
+  Future<void> deleteEmployee(int id) async {
+    await _api.delete('/employees/$id');
+  }
+
   Future<PaginatedResponse<Shop>> getShops({
     required int page,
     required int perPage,
@@ -347,6 +457,71 @@ class BackendApi {
 
   Future<void> deleteShop(int id) async {
     await _api.delete('/shops/$id');
+  }
+
+  /// Calls POST /geocode-address and returns the parsed data map.
+  /// Throws [ApiException] on failure or when the backend returns
+  /// `{ "success": false }`.
+  Future<Map<String, dynamic>> geocodeAddress(String address) async {
+    final result = await _api.post(
+      '/geocode-address',
+      body: {'address': address},
+    );
+
+    if (result is! Map<String, dynamic>) {
+      throw ApiException(
+          statusCode: 500, message: 'Invalid geocode response.');
+    }
+
+    if (result['success'] != true) {
+      final msg = (result['message'] ?? 'Unable to geocode the provided address.')
+          .toString();
+      throw ApiException(statusCode: 422, message: msg);
+    }
+
+    final data = result['data'];
+    if (data is! Map<String, dynamic>) {
+      throw ApiException(
+          statusCode: 500, message: 'Missing geocode data.');
+    }
+
+    return Map<String, dynamic>.from(data);
+  }
+
+  /// Calls POST /reverse-geocode and returns the parsed data map.
+  /// Throws [ApiException] on failure or when the backend returns
+  /// `{ "success": false }`.
+  Future<Map<String, dynamic>> reverseGeocode({
+    required double latitude,
+    required double longitude,
+  }) async {
+    final result = await _api.post(
+      '/reverse-geocode',
+      body: {
+        'latitude': latitude.toString(),
+        'longitude': longitude.toString(),
+      },
+    );
+
+    if (result is! Map<String, dynamic>) {
+      throw ApiException(
+          statusCode: 500, message: 'Invalid reverse geocode response.');
+    }
+
+    if (result['success'] != true) {
+      final msg = (result['message'] ??
+              'Unable to reverse geocode the provided coordinates.')
+          .toString();
+      throw ApiException(statusCode: 422, message: msg);
+    }
+
+    final data = result['data'];
+    if (data is! Map<String, dynamic>) {
+      throw ApiException(
+          statusCode: 500, message: 'Missing reverse geocode data.');
+    }
+
+    return Map<String, dynamic>.from(data);
   }
 
   Future<PaginatedResponse<Product>> getProducts({

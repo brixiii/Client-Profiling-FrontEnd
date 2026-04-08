@@ -19,7 +19,7 @@ class _EditEmployeeScreenState extends State<EditEmployeeScreen> {
   String? _selectedRole;
   bool _isSaving = false;
 
-  final List<String> _roles = ['Super Admin', 'Admin', 'Salesperson', 'Technician'];
+  final List<String> _roles = ['Salesperson', 'Technician', 'Customer Representative'];
 
   @override
   void initState() {
@@ -116,7 +116,7 @@ class _EditEmployeeScreenState extends State<EditEmployeeScreen> {
                           height: 20,
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
-                      : const Text('Update Employee'),
+                      : const Text('Submit'),
                 ),
               ),
             ),
@@ -130,11 +130,11 @@ class _EditEmployeeScreenState extends State<EditEmployeeScreen> {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _isSaving = true);
     try {
-      await BackendApi().updateUser(
+      await BackendApi().updateEmployee(
         id: widget.employee.id,
         payload: {
-          'name': _fullNameController.text.trim(),
-          'role': _selectedRole,
+          'efullname': _fullNameController.text.trim(),
+          'employee_type_id': _selectedRole,
         },
       );
       if (!mounted) return;

@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../../../shared/session_flags.dart';
 
 import '../../../features/login/screens/login_screen.dart';
 import '../../../shared/api/api_exception.dart';
@@ -479,8 +480,6 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _buildSectionHeader('Shop Details'),
-            const SizedBox(height: 8),
             _buildShopDetailsCard(context),
             const SizedBox(height: 20),
             _buildSectionHeader('Product Details'),
@@ -560,167 +559,256 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> {
       'viberNo': viberNo,
     };
 
+    final initial = shopName.isNotEmpty ? shopName.substring(0, 1).toUpperCase() : '?';
+
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
+            color: Colors.black.withOpacity(0.07),
+            blurRadius: 16,
+            offset: const Offset(0, 4),
           ),
         ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (_isShopLoading)
-            const Padding(
-              padding: EdgeInsets.only(bottom: 12),
-              child: LinearProgressIndicator(minHeight: 2),
-            )
-          else if (_shopError != null)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: Text(
-                _shopError!,
-                style: const TextStyle(fontSize: 12, color: Color(0xFFB91C1C)),
+          // Gradient header band
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                colors: [Color(0xFF87CEEB), Color(0xFF2563EB)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.only(
+                topLeft: Radius.circular(16),
+                topRight: Radius.circular(16),
               ),
             ),
-          _infoRow('Address', address),
-          _divider(),
-          _infoRow('Pin Location', pinLocation),
-          _divider(),
-          _linkInfoRow(context, 'Google Maps', googleMaps),
-          _divider(),
-          _infoRow('Branch Type', branchType),
-          _divider(),
-          _infoRow('Contact Person', contactPerson),
-          _divider(),
-          _infoRow('Contact Person\nEmail', contactEmail),
-          _divider(),
-          _infoRow('Contact No.', contactNo),
-          _divider(),
-          _infoRow('Viber No.', viberNo),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              Expanded(
-                child: ElevatedButton.icon(
-                  onPressed: () async {
-                    await Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => EditShopScreen(client: effectiveClient),
-                      ),
-                    );
-                    await _fetchClientAndShop();
-                    await Future.wait([
-                      _fetchProducts(),
-                      _fetchServices(),
-                    ]);
-                  },
-                  icon: const Icon(Icons.edit, color: Colors.white, size: 18),
-                  label: const Text(
-                    'Edit',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w600,
-                      fontSize: 15,
-                    ),
+            child: Row(
+              children: [
+                Container(
+                  width: 56,
+                  height: 56,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                        color: Colors.white.withOpacity(0.4), width: 1.5),
                   ),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF2563EB),
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(30),
+                  child: Center(
+                    child: Text(
+                      initial,
+                      style: const TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.w800,
+                        color: Colors.white,
+                      ),
                     ),
-                    elevation: 0,
                   ),
                 ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: ElevatedButton.icon(
-                  onPressed: shopId.isEmpty
-                      ? null
-                      : () async {
-                          final confirmed = await showDialog<bool>(
-                            context: context,
-                            builder: (context) => AlertDialog(
-                              title: const Text('Delete Shop'),
-                              content: const Text(
-                                  'Are you sure you want to delete this shop? This action cannot be undone.'),
-                              actions: [
-                                TextButton(
-                                  onPressed: () =>
-                                      Navigator.pop(context, false),
-                                  child: const Text('Cancel'),
-                                ),
-                                ElevatedButton(
-                                  onPressed: () => Navigator.pop(context, true),
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: const Color(0xFFEF4444),
-                                    foregroundColor: Colors.white,
-                                    elevation: 0,
-                                  ),
-                                  child: const Text('Delete'),
-                                ),
-                              ],
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        shopName,
+                        style: const TextStyle(
+                          fontSize: 17,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white,
+                        ),
+                      ),
+                      const SizedBox(height: 5),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: const Text(
+                          'Shop Details',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: Colors.white,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          // Info rows
+          Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              children: [
+                if (_isShopLoading) ...[  
+                  const LinearProgressIndicator(minHeight: 2),
+                  const SizedBox(height: 12),
+                ] else if (_shopError != null) ...[  
+                  Text(
+                    _shopError!,
+                    style: const TextStyle(
+                        fontSize: 12, color: Color(0xFFB91C1C)),
+                  ),
+                  const SizedBox(height: 12),
+                ],
+                _buildInfoRow(
+                    Icons.location_on_outlined, 'Address', address),
+                const SizedBox(height: 14),
+                _buildInfoRow(
+                    Icons.push_pin_outlined, 'Pin Location', pinLocation),
+                const SizedBox(height: 14),
+                _buildLinkInfoRow(
+                    context, Icons.map_outlined, 'Google Maps', googleMaps),
+                const SizedBox(height: 14),
+                _buildInfoRow(
+                    Icons.store_outlined, 'Branch Type', branchType),
+                const SizedBox(height: 14),
+                _buildInfoRow(
+                    Icons.person_outline, 'Contact Person', contactPerson),
+                const SizedBox(height: 14),
+                _buildInfoRow(Icons.email_outlined, 'Contact Person Email',
+                    contactEmail),
+                const SizedBox(height: 14),
+                _buildInfoRow(
+                    Icons.phone_outlined, 'Contact No.', contactNo),
+                const SizedBox(height: 14),
+                _buildInfoRow(
+                    Icons.chat_bubble_outline, 'Viber No.', viberNo),
+                const SizedBox(height: 20),
+                // Pill action buttons
+                Row(
+                  children: [
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: () async {
+                          await Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) =>
+                                  EditShopScreen(client: effectiveClient),
                             ),
                           );
-
-                          if (confirmed != true) return;
-
-                          try {
-                            await _api.deleteShop(int.parse(shopId));
-                            if (!mounted) return;
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                  content: Text('Shop deleted successfully.')),
-                            );
-                            setState(() => _shopDetails = null);
-                            await _fetchClientAndShop();
-                            await Future.wait([
-                              _fetchProducts(),
-                              _fetchServices(),
-                            ]);
-                          } on ApiException catch (e) {
-                            if (!mounted) return;
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text(e.message)),
-                            );
-                          } catch (_) {
-                            if (!mounted) return;
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                  content: Text('Failed to delete shop.')),
-                            );
-                          }
+                          await _fetchClientAndShop();
+                          await Future.wait([
+                            _fetchProducts(),
+                            _fetchServices(),
+                          ]);
                         },
-                  icon: const Icon(Icons.delete, color: Colors.white, size: 18),
-                  label: const Text(
-                    'Delete',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w600,
-                      fontSize: 15,
+                        icon: const Icon(Icons.edit_outlined, size: 18),
+                        label: const Text('Edit'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF2563EB),
+                          foregroundColor: Colors.white,
+                          padding:
+                              const EdgeInsets.symmetric(vertical: 13),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(30),
+                          ),
+                          elevation: 0,
+                          textStyle: const TextStyle(
+                              fontSize: 14, fontWeight: FontWeight.w600),
+                        ),
+                      ),
                     ),
-                  ),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFEF4444),
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(30),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: SessionFlags.userRole != 'Super Admin' ||
+                                shopId.isEmpty
+                            ? null
+                            : () async {
+                                final confirmed = await showDialog<bool>(
+                                  context: context,
+                                  builder: (context) => AlertDialog(
+                                    title: const Text('Delete Shop'),
+                                    content: const Text(
+                                        'Are you sure you want to delete this shop? This action cannot be undone.'),
+                                    actions: [
+                                      TextButton(
+                                        onPressed: () =>
+                                            Navigator.pop(context, false),
+                                        child: const Text('Cancel'),
+                                      ),
+                                      ElevatedButton(
+                                        onPressed: () =>
+                                            Navigator.pop(context, true),
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor:
+                                              const Color(0xFFEF4444),
+                                          foregroundColor: Colors.white,
+                                          elevation: 0,
+                                        ),
+                                        child: const Text('Delete'),
+                                      ),
+                                    ],
+                                  ),
+                                );
+
+                                if (confirmed != true) return;
+
+                                try {
+                                  await _api.deleteShop(int.parse(shopId));
+                                  if (!mounted) return;
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                        content: Text(
+                                            'Shop deleted successfully.')),
+                                  );
+                                  setState(() => _shopDetails = null);
+                                  await _fetchClientAndShop();
+                                  await Future.wait([
+                                    _fetchProducts(),
+                                    _fetchServices(),
+                                  ]);
+                                } on ApiException catch (e) {
+                                  if (!mounted) return;
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(content: Text(e.message)),
+                                  );
+                                } catch (_) {
+                                  if (!mounted) return;
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                        content:
+                                            Text('Failed to delete shop.')),
+                                  );
+                                }
+                              },
+                        icon: const Icon(Icons.delete_outline, size: 18),
+                        label: const Text('Delete'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFFEF4444),
+                          foregroundColor: Colors.white,
+                          padding:
+                              const EdgeInsets.symmetric(vertical: 13),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(30),
+                          ),
+                          elevation: 0,
+                          textStyle: const TextStyle(
+                              fontSize: 14, fontWeight: FontWeight.w600),
+                        ),
+                      ),
                     ),
-                    elevation: 0,
-                  ),
+                  ],
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ],
       ),
@@ -782,8 +870,8 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> {
                     style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
                   ),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFFFA500),
-                    foregroundColor: Colors.white,
+                    backgroundColor: const Color(0xFFFFC300),
+                    foregroundColor: Colors.black,
                     padding: const EdgeInsets.symmetric(
                         horizontal: 12, vertical: 10),
                     shape: RoundedRectangleBorder(
@@ -911,8 +999,8 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> {
                     style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
                   ),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFFFA500),
-                    foregroundColor: Colors.white,
+                    backgroundColor: const Color(0xFFFFC300),
+                    foregroundColor: Colors.black,
                     padding: const EdgeInsets.symmetric(
                         horizontal: 12, vertical: 10),
                     shape: RoundedRectangleBorder(
@@ -985,34 +1073,37 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> {
     );
   }
 
-  Widget _infoRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 10),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 130,
-            child: Text(
-              label,
-              style: const TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color: Colors.black87,
-              ),
-            ),
+  Widget _buildInfoRow(IconData icon, String label, String value) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: 34,
+          height: 34,
+          decoration: BoxDecoration(
+            color: const Color(0xFF2563EB).withOpacity(0.07),
+            borderRadius: BorderRadius.circular(9),
           ),
-          Expanded(
-            child: Text(
-              value,
-              style: const TextStyle(
-                fontSize: 13,
-                color: Colors.black87,
-              ),
-            ),
+          child: Icon(icon, size: 17, color: const Color(0xFF2563EB)),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(label,
+                  style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.grey[500])),
+              const SizedBox(height: 2),
+              Text(value,
+                  style: const TextStyle(
+                      fontSize: 14, color: Colors.black87, height: 1.4)),
+            ],
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
@@ -1027,41 +1118,53 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> {
     }
   }
 
-  Widget _linkInfoRow(BuildContext context, String label, String value) {
+  Widget _buildLinkInfoRow(
+      BuildContext context, IconData icon, String label, String value) {
     final hasLink = value.isNotEmpty && value.startsWith('http');
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 10),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 130,
-            child: Text(
-              label,
-              style: const TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color: Colors.black87,
-              ),
-            ),
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: 34,
+          height: 34,
+          decoration: BoxDecoration(
+            color: const Color(0xFF2563EB).withOpacity(0.07),
+            borderRadius: BorderRadius.circular(9),
           ),
-          Expanded(
-            child: GestureDetector(
-              onTap: hasLink ? () => _openUrl(value) : null,
-              child: Text(
-                value.isEmpty ? '-' : value,
-                style: TextStyle(
-                  fontSize: 13,
-                  color: hasLink ? const Color(0xFF2563EB) : Colors.black87,
-                  decoration:
-                      hasLink ? TextDecoration.underline : TextDecoration.none,
-                  decorationColor: hasLink ? const Color(0xFF2563EB) : null,
+          child: Icon(icon, size: 17, color: const Color(0xFF2563EB)),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(label,
+                  style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.grey[500])),
+              const SizedBox(height: 2),
+              GestureDetector(
+                onTap: hasLink ? () => _openUrl(value) : null,
+                child: Text(
+                  value.isEmpty ? '-' : value,
+                  style: TextStyle(
+                    fontSize: 14,
+                    color:
+                        hasLink ? const Color(0xFF2563EB) : Colors.black87,
+                    decoration: hasLink
+                        ? TextDecoration.underline
+                        : TextDecoration.none,
+                    decorationColor:
+                        hasLink ? const Color(0xFF2563EB) : null,
+                    height: 1.4,
+                  ),
                 ),
               ),
-            ),
+            ],
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 

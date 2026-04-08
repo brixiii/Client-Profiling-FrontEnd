@@ -79,7 +79,7 @@ class _EmployeeDetailScreenState extends State<EmployeeDetailScreen> {
                     fontWeight: FontWeight.w600,
                   ),
                 ),
-                child: const Text('Update'),
+                child: const Text('Edit'),
               ),
             ),
             const SizedBox(height: 12),
@@ -175,7 +175,7 @@ class _EmployeeDetailScreenState extends State<EmployeeDetailScreen> {
   Future<void> _deleteEmployee() async {
     setState(() => _isDeleting = true);
     try {
-      await BackendApi().deleteUser(widget.employee.id);
+      await BackendApi().deleteEmployee(widget.employee.id);
       if (!mounted) return;
       Navigator.pop(context, 'deleted');
     } on ApiException catch (e) {

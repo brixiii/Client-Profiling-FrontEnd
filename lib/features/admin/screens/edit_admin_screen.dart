@@ -179,7 +179,7 @@ class _EditAdminScreenState extends State<EditAdminScreen> {
                         height: 20,
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
-                    : const Text('Update Admin'),
+                    : const Text('Submit'),
               ),
             ),
             const SizedBox(height: 24),

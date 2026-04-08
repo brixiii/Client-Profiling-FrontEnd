@@ -110,7 +110,7 @@ class _ResellersScreenState extends State<ResellersScreen> {
                   childAspectRatio: 1.5,
                   children: [
                     AnalyticsCard(
-                      title: 'Overall Resellers',
+                      title: 'Resellers',
                       value: '$_analyticsResellers',
                       backgroundColor: const Color(0xFFB3E5FC),
                     ),
@@ -177,8 +177,8 @@ class _ResellersScreenState extends State<ResellersScreen> {
                         icon: const Icon(Icons.add, size: 18),
                         label: const Text('Add Reseller'),
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF2563EB),
-                          foregroundColor: Colors.white,
+                          backgroundColor: const Color(0xFFFFC300),
+                          foregroundColor: Colors.black,
                           padding: const EdgeInsets.symmetric(
                             horizontal: 12,
                             vertical: 8,

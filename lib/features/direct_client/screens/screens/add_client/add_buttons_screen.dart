@@ -5,8 +5,11 @@ import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import '../../../../../shared/widgets/custom_app_bar.dart';
 import '../../../../../shared/api/backend_api.dart';
+import '../../../../../shared/data/philippine_address_data.dart';
 import '../../../../../shared/api/api_exception.dart';
 import '../../../../../shared/api/paginated_response.dart';
+import 'map_picker_screen.dart';
+import 'package:latlong2/latlong.dart';
 import '../../../../../shared/models/availed_service.dart';
 import '../../../../../shared/models/employee.dart';
 import '../../../../../shared/models/product.dart';
@@ -79,10 +82,15 @@ class _AddButtonsScreenState extends State<AddButtonsScreen> {
   DateTime? _deliveryDate;
   DateTime? _installationDate;
   final _laborPlanController = TextEditingController();
+  String? _salesPersonName;
   final _productNotesController = TextEditingController();
 
   // ── Shop controllers ───────────────────────────────────────────────────
   final _shopNameController = TextEditingController();
+  String? _shopRegion;
+  String? _shopCity;
+  String? _shopBarangay;
+  final _shopStreetController = TextEditingController();
   final _shopAddressController = TextEditingController();
   String? _shopType;
   final _pinCoordsController = TextEditingController();
@@ -92,6 +100,7 @@ class _AddButtonsScreenState extends State<AddButtonsScreen> {
   final _shopViberNoController = TextEditingController();
   final _shopContactEmailController = TextEditingController();
   final _shopNotesController = TextEditingController();
+  bool _isGeocoding = false;
 
   // ── Service controllers ──────────────────────────────────────────────────
   final _reportNoController = TextEditingController();
@@ -151,6 +160,7 @@ class _AddButtonsScreenState extends State<AddButtonsScreen> {
     _serviceOrderReportNoController.dispose();
     _serviceNotesController.dispose();
     _shopNameController.dispose();
+    _shopStreetController.dispose();
     _shopAddressController.dispose();
     _pinCoordsController.dispose();
     _googleMapsController.dispose();
@@ -342,7 +352,7 @@ class _AddButtonsScreenState extends State<AddButtonsScreen> {
                 : (availableClientTypeIds.isNotEmpty
                     ? availableClientTypeIds.first
                     : null);
-        _selectedEmployeeId = employees.isNotEmpty ? employees.first.id : null;
+        // Do NOT auto-assign; Sales Person must be explicitly selected by user
 
         final initialShopId = widget.initialShopId;
         if (initialShopId != null) {
@@ -389,6 +399,12 @@ class _AddButtonsScreenState extends State<AddButtonsScreen> {
           );
         _selectedTechnicians[0] =
             _technicianOptions.isNotEmpty ? _technicianOptions.first : null;
+        // Sales Person requires explicit user selection — never auto-assign
+        if (_salesPersonName != null &&
+            !_technicianOptions.contains(_salesPersonName)) {
+          _salesPersonName = null;
+          _selectedEmployeeId = null;
+        }
 
         _serviceTypes
           ..clear()
@@ -421,10 +437,190 @@ class _AddButtonsScreenState extends State<AddButtonsScreen> {
       return;
     }
 
+    // Geocode when leaving Shop step 0 (address fields) → step 1 (location)
+    if (widget.mode == AddMode.shop && currentStep == 0) {
+      _geocodeAndProceed();
+      return;
+    }
+
     if (currentStep < 3) {
       setState(() => currentStep++);
     } else {
       Navigator.pop(context);
+    }
+  }
+
+  /// Builds the full address, calls the backend forward-geocode endpoint,
+  /// opens a map picker for the user to refine the pin, then calls
+  /// reverse-geocode to fill location fields and proceeds to step 1.
+  Future<void> _geocodeAndProceed() async {
+    // Build full address string: Street, Barangay, City, Region, Philippines
+    final street = _shopStreetController.text.trim();
+    final barangay = (_shopBarangay ?? '').trim();
+    final city = (_shopCity ?? '').trim();
+    final region = (_shopRegion ?? '').trim();
+
+    final parts = <String>[
+      if (street.isNotEmpty) street,
+      if (barangay.isNotEmpty) barangay,
+      if (city.isNotEmpty) city,
+      if (region.isNotEmpty) region,
+      'Philippines',
+    ];
+    final fullAddress = parts.join(', ');
+
+    // Compose the combined address for the saddress payload field
+    final addressParts = <String>[
+      if (street.isNotEmpty) street,
+      if (barangay.isNotEmpty) barangay,
+      if (city.isNotEmpty) city,
+      if (region.isNotEmpty) region,
+    ];
+    _shopAddressController.text = addressParts.join(', ');
+
+    setState(() {
+      _isGeocoding = true;
+      _globalError = null;
+    });
+
+    // ── Forward geocode ────────────────────────────────────────────────
+    try {
+      final data = await _api.geocodeAddress(fullAddress);
+      if (!mounted) return;
+
+      setState(() {
+        _pinCoordsController.text = (data['location'] ?? '').toString();
+        _googleMapsController.text = (data['google_maps_link'] ?? '').toString();
+        _isGeocoding = false;
+        currentStep = 1;
+      });
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _isGeocoding = false;
+        _globalError = e.message.isNotEmpty
+            ? e.message
+            : 'Unable to geocode the provided address.';
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _isGeocoding = false;
+        _globalError = _friendlyErrorMessage(e);
+      });
+    }
+  }
+
+  /// Returns a user-friendly message for common network / parse errors.
+  String _friendlyErrorMessage(Object e) {
+    final s = e.toString();
+    if (s.contains('SocketException') || s.contains('HandshakeException')) {
+      return 'No internet connection. Please check your network and try again.';
+    }
+    if (s.contains('TimeoutException')) {
+      return 'Request timed out. Please try again.';
+    }
+    if (s.contains('FormatException')) {
+      return 'Invalid response from server. Please try again.';
+    }
+    return 'Failed to look up address. Please try again.';
+  }
+
+  /// Opens the map picker from Step 1 using current Pin Coordinates or
+  /// a fallback forward-geocode from the address fields.
+  Future<void> _openMapPickerFromStep1() async {
+    double? lat;
+    double? lng;
+
+    // Try to parse existing pin coordinates first
+    final coords = _pinCoordsController.text.trim();
+    if (coords.contains(',')) {
+      final parts = coords.split(',');
+      lat = double.tryParse(parts[0].trim());
+      lng = double.tryParse(parts[1].trim());
+    }
+
+    // If no valid coords, forward-geocode the address
+    if (lat == null || lng == null) {
+      final street = _shopStreetController.text.trim();
+      final barangay = (_shopBarangay ?? '').trim();
+      final city = (_shopCity ?? '').trim();
+      final region = (_shopRegion ?? '').trim();
+      final addrParts = <String>[
+        if (street.isNotEmpty) street,
+        if (barangay.isNotEmpty) barangay,
+        if (city.isNotEmpty) city,
+        if (region.isNotEmpty) region,
+        'Philippines',
+      ];
+      final fullAddress = addrParts.join(', ');
+
+      setState(() {
+        _isGeocoding = true;
+        _globalError = null;
+      });
+
+      try {
+        final data = await _api.geocodeAddress(fullAddress);
+        if (!mounted) return;
+        lat = double.parse(data['latitude'].toString());
+        lng = double.parse(data['longitude'].toString());
+      } catch (e) {
+        if (!mounted) return;
+        setState(() {
+          _isGeocoding = false;
+          _globalError = (e is ApiException && e.message.isNotEmpty)
+              ? e.message
+              : _friendlyErrorMessage(e);
+        });
+        return;
+      }
+
+      setState(() => _isGeocoding = false);
+    }
+
+    // Open map picker
+    final LatLng? picked = await Navigator.push<LatLng>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => MapPickerScreen(latitude: lat!, longitude: lng!),
+      ),
+    );
+
+    if (!mounted || picked == null) return;
+
+    // Reverse geocode the selected point
+    setState(() {
+      _isGeocoding = true;
+      _globalError = null;
+    });
+
+    try {
+      final data = await _api.reverseGeocode(
+        latitude: picked.latitude,
+        longitude: picked.longitude,
+      );
+      if (!mounted) return;
+
+      setState(() {
+        _pinCoordsController.text = (data['location'] ?? '').toString();
+        _googleMapsController.text = (data['google_maps_link'] ?? '').toString();
+        _isGeocoding = false;
+      });
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _isGeocoding = false;
+        _globalError = e.message.isNotEmpty
+            ? e.message
+            : 'Unable to reverse geocode the selected location.';
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _isGeocoding = false;
+        _globalError = _friendlyErrorMessage(e);
+      });
     }
   }
 
@@ -488,11 +684,20 @@ class _AddButtonsScreenState extends State<AddButtonsScreen> {
           if (_shopNameController.text.trim().isEmpty) {
             errors['shopname'] = 'Shop name is required.';
           }
-          if (_shopAddressController.text.trim().isEmpty) {
-            errors['saddress'] = 'Shop address is required.';
+          if ((_shopRegion ?? '').trim().isEmpty) {
+            errors['region'] = 'Region is required.';
+          }
+          if ((_shopCity ?? '').trim().isEmpty) {
+            errors['city'] = 'Municipality / City is required.';
+          }
+          if ((_shopBarangay ?? '').trim().isEmpty) {
+            errors['barangay'] = 'Barangay is required.';
+          }
+          if (_shopStreetController.text.trim().isEmpty) {
+            errors['street'] = 'Street is required.';
           }
           if ((_shopTypeIds[_shopType] ?? '').trim().isEmpty) {
-            errors['shop_type_id'] = 'Shop type is required.';
+            errors['shop_type_id'] = 'Branch type is required.';
           }
         }
         if (currentStep == 2) {
@@ -771,8 +976,23 @@ class _AddButtonsScreenState extends State<AddButtonsScreen> {
             _buildDateField('Installation Date', _installationDate,
                 (d) => setState(() => _installationDate = d)),
             const SizedBox(height: 12),
-            _buildTextField(_laborPlanController,
-                hint: 'Sales Person', errorText: _fieldErrors['employee_id']),
+            _buildDropdown(
+              'Sales Person',
+              _salesPersonName,
+              _technicianOptions,
+              (v) {
+                setState(() {
+                  _salesPersonName = v;
+                  final match = _employees.cast<Employee?>().firstWhere(
+                        (e) => e != null && e.name == v,
+                        orElse: () => null,
+                      );
+                  _selectedEmployeeId = match?.id;
+                  _fieldErrors.remove('employee_id');
+                });
+              },
+              errorText: _fieldErrors['employee_id'],
+            ),
           ],
         );
       case 3:
@@ -1075,6 +1295,15 @@ class _AddButtonsScreenState extends State<AddButtonsScreen> {
   Widget addShopDetails() {
     switch (currentStep) {
       case 0:
+        final cityOptions = _shopRegion != null
+            ? PhilippineAddressData.citiesFor(_shopRegion!)
+            : <String>[];
+        final barangayOptions =
+            (_shopRegion != null && _shopCity != null)
+                ? PhilippineAddressData.barangaysFor(
+                    _shopRegion!, _shopCity!)
+                : <String>[];
+
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -1087,12 +1316,58 @@ class _AddButtonsScreenState extends State<AddButtonsScreen> {
             _buildTextField(_shopNameController,
                 hint: 'Shop Name', errorText: _fieldErrors['shopname']),
             const SizedBox(height: 12),
-            _buildTextField(_shopAddressController,
-                hint: 'Shop Address', errorText: _fieldErrors['saddress']),
+            _buildDropdown(
+              'Region',
+              _shopRegion,
+              PhilippineAddressData.regions,
+              (v) => setState(() {
+                _shopRegion = v;
+                _shopCity = null;
+                _shopBarangay = null;
+              }),
+              errorText: _fieldErrors['region'],
+            ),
             const SizedBox(height: 12),
-            _buildDropdown('Shop Type', _shopType, _shopTypes,
+            _buildDropdown(
+              'Municipality / City',
+              _shopCity,
+              cityOptions,
+              (v) => setState(() {
+                _shopCity = v;
+                _shopBarangay = null;
+              }),
+              errorText: _fieldErrors['city'],
+            ),
+            const SizedBox(height: 12),
+            _buildDropdown(
+              'Barangay',
+              _shopBarangay,
+              barangayOptions,
+              (v) => setState(() => _shopBarangay = v),
+              errorText: _fieldErrors['barangay'],
+            ),
+            const SizedBox(height: 12),
+            _buildTextField(_shopStreetController,
+                hint: 'Street / Building / House No.',
+                errorText: _fieldErrors['street']),
+            const SizedBox(height: 12),
+            _buildDropdown('Branch Type', _shopType, _shopTypes,
                 (v) => setState(() => _shopType = v),
                 errorText: _fieldErrors['shop_type_id']),
+            if (_isGeocoding) ...[
+              const SizedBox(height: 16),
+              const Row(
+                children: [
+                  SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2)),
+                  SizedBox(width: 10),
+                  Text('Looking up address…',
+                      style: TextStyle(fontSize: 13, color: Colors.black54)),
+                ],
+              ),
+            ],
           ],
         );
       case 1:
@@ -1108,6 +1383,28 @@ class _AddButtonsScreenState extends State<AddButtonsScreen> {
             _buildTextField(_pinCoordsController, hint: 'Pin Coordinates'),
             const SizedBox(height: 12),
             _buildTextField(_googleMapsController, hint: 'Google Maps Link'),
+            const SizedBox(height: 14),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: _isGeocoding ? null : _openMapPickerFromStep1,
+                icon: _isGeocoding
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.map_outlined, size: 18),
+                label: Text(_isGeocoding ? 'Updating location…' : 'Pick on Map'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: const Color(0xFF2563EB),
+                  side: const BorderSide(color: Color(0xFF2563EB)),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8)),
+                ),
+              ),
+            ),
           ],
         );
       case 2:
@@ -1342,7 +1639,7 @@ class _AddButtonsScreenState extends State<AddButtonsScreen> {
               Align(
                 alignment: Alignment.centerRight,
                 child: ElevatedButton(
-                  onPressed: _isSubmitting || _isLoadingDependencies
+                  onPressed: _isSubmitting || _isLoadingDependencies || _isGeocoding
                       ? null
                       : _nextStep,
                   style: ElevatedButton.styleFrom(
@@ -1354,9 +1651,16 @@ class _AddButtonsScreenState extends State<AddButtonsScreen> {
                         borderRadius: BorderRadius.circular(8)),
                     elevation: 0,
                   ),
-                  child: const Text('Next',
-                      style:
-                          TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                  child: _isGeocoding
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                              strokeWidth: 2, color: Colors.white),
+                        )
+                      : const Text('Next',
+                          style: TextStyle(
+                              fontSize: 16, fontWeight: FontWeight.w600)),
                 ),
               ),
 
@@ -1900,6 +2204,7 @@ class _AddButtonsScreenState extends State<AddButtonsScreen> {
         technicianIds: technicianIds,
         clientId: _resolveScopedClientId() ?? 0,
         shopId: _resolveScopedShopId(),
+
       );
 
       if (!mounted) return;
@@ -1993,8 +2298,8 @@ class _AddButtonsScreenState extends State<AddButtonsScreen> {
         (expectedCode == null || expectedCode.trim().isEmpty)) {
       errors['model_code'] = 'Model code does not match selected model/type.';
     }
-    if (_selectedEmployeeId == null) {
-      errors['employee_id'] = 'Employee is required.';
+    if (_salesPersonName == null || _selectedEmployeeId == null) {
+      errors['employee_id'] = 'Sales Person is required.';
     }
     return errors;
   }
@@ -2128,8 +2433,17 @@ class _AddButtonsScreenState extends State<AddButtonsScreen> {
     if (_shopNameController.text.trim().isEmpty) {
       errors['shopname'] = 'Shop name is required.';
     }
-    if (_shopAddressController.text.trim().isEmpty) {
-      errors['saddress'] = 'Shop address is required.';
+    if ((_shopRegion ?? '').trim().isEmpty) {
+      errors['region'] = 'Region is required.';
+    }
+    if ((_shopCity ?? '').trim().isEmpty) {
+      errors['city'] = 'Municipality / City is required.';
+    }
+    if ((_shopBarangay ?? '').trim().isEmpty) {
+      errors['barangay'] = 'Barangay is required.';
+    }
+    if (_shopStreetController.text.trim().isEmpty) {
+      errors['street'] = 'Street is required.';
     }
     _validateRequiredPhone(
       key: 'svibernum',
@@ -2356,13 +2670,16 @@ class _AddButtonsScreenState extends State<AddButtonsScreen> {
   Widget _buildDropdown(String hint, String? value, List<String> items,
       ValueChanged<String?> onChanged,
       {String? errorText}) {
-    final safeValue = items.contains(value) ? value : null;
+    // Deduplicate while preserving order to prevent DropdownButton assertion
+    final seen = <String>{};
+    final uniqueItems = items.where((e) => seen.add(e)).toList();
+    final safeValue = uniqueItems.contains(value) ? value : null;
 
     // Flutter disables DropdownButton internally when items is empty
     // (items.isNotEmpty is part of _enabled). Render a plain placeholder
     // instead so the container always looks consistent.
     Widget dropdownChild;
-    if (items.isEmpty) {
+    if (uniqueItems.isEmpty) {
       dropdownChild = SizedBox(
         height: 48,
         child: Align(
@@ -2380,7 +2697,7 @@ class _AddButtonsScreenState extends State<AddButtonsScreen> {
           isExpanded: true,
           hint: Text(hint,
               style: TextStyle(color: Colors.grey[400], fontSize: 14)),
-          items: items
+          items: uniqueItems
               .map((item) => DropdownMenuItem(
                     value: item,
                     child: Text(item,

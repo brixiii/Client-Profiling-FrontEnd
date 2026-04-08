@@ -1,7 +1,8 @@
 ﻿import 'package:flutter/foundation.dart' show kIsWeb, debugPrint;
 import 'package:flutter/material.dart';
-import 'package:fl_chart/fl_chart.dart';
+import 'package:flutter/services.dart';
 import 'package:file_picker/file_picker.dart';
+import '../../../shared/api/api_exception.dart';
 import '../../../shared/api/backend_api.dart';
 import '../../../shared/models/user.dart';
 import '../../../shared/session_flags.dart';
@@ -9,6 +10,7 @@ import '../../../shared/widgets/analytics_card.dart';
 import '../../../shared/widgets/animated_fade_slide.dart';
 import '../../../shared/widgets/app_drawer.dart';
 import '../../../shared/widgets/custom_app_bar.dart';
+import '../widgets/dashboard_charts.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({Key? key}) : super(key: key);
@@ -44,6 +46,15 @@ class _DashboardScreenState extends State<DashboardScreen>
   int _shopsCount = 0;
   User? _profileUser;
 
+  // ── Analytics state ─────────────────────────────────────────────────────
+  List<int> _soldProductsMonthly = List.filled(12, 0);
+  Map<String, int> _servicesBreakdown = const {
+    'Repair': 0, 'Maintenance': 0, 'Installation': 0, 'Delivery': 0,
+  };
+  List<Map<String, dynamic>> _topProducts = const [];
+  List<int> _clientGrowthMonthly = List.filled(12, 0);
+  bool _chartsLoading = true;
+
   @override
   void initState() {
     super.initState();
@@ -66,6 +77,7 @@ class _DashboardScreenState extends State<DashboardScreen>
     );
     _fetchCards();
     _fetchProfile();
+    _fetchAnalytics();
   }
 
   @override
@@ -100,6 +112,32 @@ class _DashboardScreenState extends State<DashboardScreen>
   }
 
   // ── Data fetching ────────────────────────────────────────────────────────
+  Future<void> _fetchAnalytics() async {
+    try {
+      final year = DateTime.now().year;
+      final results = await Future.wait([
+        _api.getSoldProductsMonthly(year: year),
+        _api.getServicesBreakdown(),
+        _api.getTopProducts(),
+        _api.getClientGrowthMonthly(year: year),
+      ]);
+      if (!mounted) return;
+      setState(() {
+        _soldProductsMonthly =
+            results[0] as List<int>? ?? List.filled(12, 0);
+        _servicesBreakdown =
+            results[1] as Map<String, int>? ?? _servicesBreakdown;
+        _topProducts =
+            results[2] as List<Map<String, dynamic>>? ?? const [];
+        _clientGrowthMonthly =
+            results[3] as List<int>? ?? List.filled(12, 0);
+        _chartsLoading = false;
+      });
+    } catch (_) {
+      if (mounted) setState(() => _chartsLoading = false);
+    }
+  }
+
   Future<void> _fetchCards() async {
     try {
       final summary = await _api.getDashboardSummary();
@@ -333,169 +371,40 @@ class _DashboardScreenState extends State<DashboardScreen>
               ),
             ),
 
-            // Sold Product in 2026 Chart — fades in with delay
-            AnimatedFadeSlide(
-              delay: const Duration(milliseconds: 180),
-              child: Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
+            // ── Analytics charts ─────────────────────────────────────
+            if (_chartsLoading)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 32),
+                child: Center(child: CircularProgressIndicator()),
+              )
+            else ...[
+              AnimatedFadeSlide(
+                delay: const Duration(milliseconds: 180),
+                child: SoldProductsBarChart(
+                  monthlyCounts: _soldProductsMonthly,
+                  year: DateTime.now().year,
+                ),
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Sold Products in 2026',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.black,
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  LayoutBuilder(
-                    builder: (context, constraints) {
-                      final chartHeight = (constraints.maxWidth * 0.55).clamp(180.0, 280.0);
-                      return SizedBox(
-                    height: chartHeight,
-                    child: BarChart(
-                      BarChartData(
-                        alignment: BarChartAlignment.spaceAround,
-                        maxY: 700,
-                        minY: 0,
-                        barTouchData: BarTouchData(enabled: false),
-                        titlesData: FlTitlesData(
-                          show: true,
-                          topTitles: AxisTitles(
-                            sideTitles: SideTitles(showTitles: false),
-                          ),
-                          rightTitles: AxisTitles(
-                            sideTitles: SideTitles(showTitles: false),
-                          ),
-                          leftTitles: AxisTitles(
-                            sideTitles: SideTitles(
-                              showTitles: true,
-                              reservedSize: 40,
-                              interval: 100,
-                              getTitlesWidget: (value, meta) {
-                                return Text(
-                                  value.toInt().toString(),
-                                  style: const TextStyle(
-                                    fontSize: 11,
-                                    color: Colors.grey,
-                                  ),
-                                );
-                              },
-                            ),
-                          ),
-                          bottomTitles: AxisTitles(
-                            sideTitles: SideTitles(
-                              showTitles: true,
-                              getTitlesWidget: (value, meta) {
-                                const months = ['Jan', 'Feb', 'Mar', 'Apr'];
-                                if (value.toInt() >= 0 && value.toInt() < months.length) {
-                                  return Padding(
-                                    padding: const EdgeInsets.only(top: 8.0),
-                                    child: Text(
-                                      months[value.toInt()],
-                                      style: const TextStyle(
-                                        fontSize: 11,
-                                        color: Colors.grey,
-                                      ),
-                                    ),
-                                  );
-                                }
-                                return const Text('');
-                              },
-                            ),
-                          ),
-                        ),
-                        gridData: FlGridData(
-                          show: true,
-                          drawVerticalLine: false,
-                          horizontalInterval: 100,
-                          getDrawingHorizontalLine: (value) {
-                            return FlLine(
-                              color: Colors.grey[300],
-                              strokeWidth: 1,
-                            );
-                          },
-                        ),
-                        borderData: FlBorderData(
-                          show: true,
-                          border: Border(
-                            left: BorderSide(color: Colors.grey[300]!),
-                            bottom: BorderSide(color: Colors.grey[300]!),
-                          ),
-                        ),
-                        barGroups: [
-                          BarChartGroupData(
-                            x: 0,
-                            barRods: [
-                              BarChartRodData(
-                                toY: 150,
-                                color: const Color(0xFF6366F1),
-                                width: 32,
-                                borderRadius: const BorderRadius.only(
-                                  topLeft: Radius.circular(4),
-                                  topRight: Radius.circular(4),
-                                ),
-                              ),
-                            ],
-                          ),
-                          BarChartGroupData(
-                            x: 1,
-                            barRods: [
-                              BarChartRodData(
-                                toY: 550,
-                                color: const Color(0xFF6366F1),
-                                width: 32,
-                                borderRadius: const BorderRadius.only(
-                                  topLeft: Radius.circular(4),
-                                  topRight: Radius.circular(4),
-                                ),
-                              ),
-                            ],
-                          ),
-                          BarChartGroupData(
-                            x: 2,
-                            barRods: [
-                              BarChartRodData(
-                                toY: 450,
-                                color: const Color(0xFF6366F1),
-                                width: 32,
-                                borderRadius: const BorderRadius.only(
-                                  topLeft: Radius.circular(4),
-                                  topRight: Radius.circular(4),
-                                ),
-                              ),
-                            ],
-                          ),
-                          BarChartGroupData(
-                            x: 3,
-                            barRods: [
-                              BarChartRodData(
-                                toY: 250,
-                                color: const Color(0xFF6366F1),
-                                width: 32,
-                                borderRadius: const BorderRadius.only(
-                                  topLeft: Radius.circular(4),
-                                  topRight: Radius.circular(4),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                  );
-                    },
-                  ),
-                ],
+              const SizedBox(height: 14),
+              AnimatedFadeSlide(
+                delay: const Duration(milliseconds: 260),
+                child: ServicesDonutChart(breakdown: _servicesBreakdown),
               ),
-            ),
-            ),
+              const SizedBox(height: 14),
+              AnimatedFadeSlide(
+                delay: const Duration(milliseconds: 340),
+                child: TopProductsChart(products: _topProducts),
+              ),
+              const SizedBox(height: 14),
+              AnimatedFadeSlide(
+                delay: const Duration(milliseconds: 420),
+                child: ClientGrowthLineChart(
+                  monthlyCounts: _clientGrowthMonthly,
+                  year: DateTime.now().year,
+                ),
+              ),
+              const SizedBox(height: 8),
+            ],
         ],
         ),
       ),
@@ -527,7 +436,10 @@ class _DashboardScreenState extends State<DashboardScreen>
   }
 
   // ── Editable row helper ─────────────────────────────────────────────────
-  Widget _buildEditRow(String label, TextEditingController controller) {
+  Widget _buildEditRow(String label, TextEditingController controller, {
+    TextInputType? keyboardType,
+    List<TextInputFormatter>? inputFormatters,
+  }) {
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
@@ -551,6 +463,8 @@ class _DashboardScreenState extends State<DashboardScreen>
             child: TextField(
               controller: controller,
               textAlign: TextAlign.end,
+              keyboardType: keyboardType,
+              inputFormatters: inputFormatters,
               style: const TextStyle(
                 fontSize: 14,
                 color: Colors.black87,
@@ -704,14 +618,17 @@ class _DashboardScreenState extends State<DashboardScreen>
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: Column(
                 children: [
-                  _isEditing
-                      ? _buildEditRow('Username', _usernameCtrl)
-                      : _ProfileInfoRow(label: 'Username', value: _usernameCtrl.text),
+                  _ProfileInfoRow(label: 'Username', value: _usernameCtrl.text),
                   _isEditing
                       ? _buildEditRow('Address', _addressCtrl)
                       : _ProfileInfoRow(label: 'Address', value: _addressCtrl.text),
                   _isEditing
-                      ? _buildEditRow('Phone', _phoneCtrl)
+                      ? _buildEditRow('Phone', _phoneCtrl,
+                          keyboardType: TextInputType.phone,
+                          inputFormatters: [
+                            FilteringTextInputFormatter.digitsOnly,
+                            LengthLimitingTextInputFormatter(11),
+                          ])
                       : _ProfileInfoRow(label: 'Phone', value: _phoneCtrl.text),
                   _isEditing
                       ? _buildEditRow('Email', _emailCtrl)
@@ -775,7 +692,27 @@ class _DashboardScreenState extends State<DashboardScreen>
                             ),
                           );
                           if (confirmed == true) {
-                            setState(() => _isEditing = false);
+                            try {
+                              final updated = await _api.updateProfile(
+                                address: _addressCtrl.text.trim(),
+                                phone: _phoneCtrl.text.trim(),
+                                email: _emailCtrl.text.trim(),
+                              );
+                              if (!mounted) return;
+                              setState(() {
+                                _profileUser = updated;
+                                _isEditing = false;
+                              });
+                              SessionFlags.loggedInUser = updated;
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('Profile updated successfully.')),
+                              );
+                            } catch (e) {
+                              if (!mounted) return;
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text(e is ApiException ? e.message : 'Failed to update profile.')),
+                              );
+                            }
                           }
                         } else {
                           setState(() => _isEditing = true);

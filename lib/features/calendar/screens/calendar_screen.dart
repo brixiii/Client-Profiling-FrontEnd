@@ -1,5 +1,6 @@
 ﻿import 'package:flutter/material.dart';
 import '../../../shared/api/backend_api.dart';
+import '../../../shared/api/api_exception.dart';
 import '../../../shared/session_flags.dart';
 import '../../../shared/widgets/app_drawer.dart';
 import '../../../shared/widgets/custom_app_bar.dart';
@@ -103,6 +104,12 @@ class _CalendarScreenState extends State<CalendarScreen>
       days.add(DateTime(month.year, month.month, i + 1));
     }
 
+    // Add trailing filler days to complete the last week row
+    final trailing = (7 - (days.length % 7)) % 7;
+    for (int i = 1; i <= trailing; i++) {
+      days.add(DateTime(month.year, month.month + 1, i));
+    }
+
     return days;
   }
 
@@ -162,6 +169,7 @@ class _CalendarScreenState extends State<CalendarScreen>
   void _goToToday() {
     setState(() {
       _currentMonth = DateTime(DateTime.now().year, DateTime.now().month, 1);
+      _gridKey++;
       events.clear();
     });
     _loadEvents();
@@ -185,12 +193,33 @@ class _CalendarScreenState extends State<CalendarScreen>
   // ── Drag-to-reschedule helpers ──────────────────────────────────────────────
 
   /// Selects [client] as the active draggable and dismisses any open preview.
+  /// Returns true if the current user may move/reschedule [client].
+  /// Super Admins can move all schedules; others only their own.
+  bool _canMoveSchedule(ScheduleEvent client) {
+    if (SessionFlags.userRole == 'Super Admin') return true;
+    final me = SessionFlags.loggedInUser;
+    if (me == null) return false;
+    final cb = client.createdBy.trim();
+    if (cb.isEmpty) return false;
+    return cb == me.id.toString();
+  }
+
   void _selectClientForDrag(ScheduleEvent client, int fromDay) {
     if (client.type == ScheduleType.resolved) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Resolved schedules cannot be moved.'),
           backgroundColor: Color(0xFF27AE60),
+          duration: Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
+    if (!_canMoveSchedule(client)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('You can only move schedules you created.'),
+          backgroundColor: Color(0xFFEF5350),
           duration: Duration(seconds: 2),
         ),
       );
@@ -212,8 +241,9 @@ class _CalendarScreenState extends State<CalendarScreen>
   }
 
   /// Moves [client] from [fromDay] to [targetDay] in the events map.
-  void _dropClientOnDay(ScheduleEvent client, DateTime targetDay, int fromDay) {
+  void _dropClientOnDay(ScheduleEvent client, DateTime targetDay, int fromDay) async {
     if (targetDay.month != _currentMonth.month) return;
+    // Optimistic update — move locally first
     setState(() {
       events[fromDay]?.removeWhere((e) => e.id == client.id);
       if (events[fromDay]?.isEmpty ?? false) {
@@ -223,14 +253,34 @@ class _CalendarScreenState extends State<CalendarScreen>
       _pendingDragClient = null;
       _pendingDragFromDay = null;
     });
-    // Persist to backend (optimistic – local state already updated)
     if (client.id > 0) {
       final d = targetDay;
       final dateStr =
           '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
-      _api
-          .updateEvent(id: client.id, payload: {'start': dateStr, 'end': dateStr})
-          .catchError((_) {});
+      try {
+        await _api.updateEvent(
+            id: client.id, payload: {'start': dateStr, 'end': dateStr});
+      } catch (e) {
+        if (!mounted) return;
+        // Rollback — restore event to original day
+        setState(() {
+          events[targetDay.day]?.removeWhere((ev) => ev.id == client.id);
+          if (events[targetDay.day]?.isEmpty ?? false) {
+            events.remove(targetDay.day);
+          }
+          events.putIfAbsent(fromDay, () => []).add(client);
+        });
+        final msg = e is ApiException && e.statusCode == 403
+            ? 'You do not have permission to move this schedule.'
+            : 'Failed to reschedule. Please try again.';
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(msg),
+            backgroundColor: const Color(0xFFEF5350),
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
     }
   }
 
@@ -600,8 +650,10 @@ class _CalendarScreenState extends State<CalendarScreen>
                             final dayEvents = allDayEvents.where((e) {
                               final matchesName = _nameFilter.isEmpty ||
                                   e.name.toLowerCase().contains(_nameFilter.toLowerCase());
-                              final matchesStatus =
-                                  _statusFilter == null || e.type == _statusFilter;
+                              final matchesStatus = _statusFilter == null ||
+                                  (_statusFilter == ScheduleType.name
+                                      ? e.nameType == NameType.asterisk
+                                      : e.type == _statusFilter);
                               return matchesName && matchesStatus;
                             }).toList();
 
@@ -787,7 +839,8 @@ class _CalendarScreenState extends State<CalendarScreen>
                                                     ],
                                                   ),
                                                 );
-                                                if (event.type == ScheduleType.resolved) {
+                                                if (event.type == ScheduleType.resolved ||
+                                                    !_canMoveSchedule(event)) {
                                                   return _card;
                                                 }
                                                 return LongPressDraggable<_CalendarDragData>(
@@ -846,8 +899,12 @@ class _CalendarScreenState extends State<CalendarScreen>
                         ),
                       ),
                       if (_statusFilter != null &&
-                          !events.values.any(
-                              (list) => list.any((e) => e.type == _statusFilter)))
+                          !events.values.any((list) => list.any((e) {
+                            if (_statusFilter == ScheduleType.name) {
+                              return e.nameType == NameType.asterisk;
+                            }
+                            return e.type == _statusFilter;
+                          })))
                         Padding(
                           padding: const EdgeInsets.symmetric(
                               vertical: 28, horizontal: 16),
@@ -913,7 +970,16 @@ class _CalendarScreenState extends State<CalendarScreen>
 
   Widget _buildPreviewCard() {
     final sel = _selectedDay!;
-    final dayEvents = events[sel.day] ?? [];
+    final allDayEvents = events[sel.day] ?? [];
+    final dayEvents = allDayEvents.where((e) {
+      final matchesName = _nameFilter.isEmpty ||
+          e.name.toLowerCase().contains(_nameFilter.toLowerCase());
+      final matchesStatus = _statusFilter == null ||
+          (_statusFilter == ScheduleType.name
+              ? e.nameType == NameType.asterisk
+              : e.type == _statusFilter);
+      return matchesName && matchesStatus;
+    }).toList();
     final dateStr = DateFormat('EEEE, MMMM d, yyyy').format(sel);
     return Container(
       decoration: const BoxDecoration(
@@ -1054,7 +1120,9 @@ class _CalendarScreenState extends State<CalendarScreen>
       ...dayEvents.take(3).map(
             (e) => _buildPreviewEventRow(
               e,
-              onSelectForDrag: () => _selectClientForDrag(e, _selectedDay!.day),
+              onSelectForDrag: _canMoveSchedule(e)
+                  ? () => _selectClientForDrag(e, _selectedDay!.day)
+                  : null,
             ),
           ),
       if (dayEvents.length > 3)
@@ -1232,8 +1300,10 @@ class _CalendarScreenState extends State<CalendarScreen>
         _gridKey++;
         _selectedDay = picked;
         _previewVisible = true;
+        events.clear();
       });
       _previewController.forward(from: 0);
+      _loadEvents();
     }
   }
 

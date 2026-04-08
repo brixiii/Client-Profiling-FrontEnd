@@ -5,7 +5,7 @@ import '../../../shared/api/api_exception.dart';
 import '../../../shared/api/backend_api.dart';
 import '../../../shared/widgets/custom_app_bar.dart';
 import 'edit_serial_number_screen.dart';
-import '../../direct_client/screens/productdetailsentities_screen.dart';
+import '../../direct_client/screens/clientshop_details_screen.dart';
 
 class SerialNumberDetailScreen extends StatefulWidget {
   final int serialId;
@@ -30,6 +30,7 @@ class _SerialNumberDetailScreenState extends State<SerialNumberDetailScreen> {
 
   bool _loading = true;
   bool _deleting = false;
+  bool _navigating = false;
   String? _error;
 
   @override
@@ -85,8 +86,72 @@ class _SerialNumberDetailScreenState extends State<SerialNumberDetailScreen> {
     }
   }
 
-  Future<void> _confirmDelete() async {
-    final name = _item?.clientName.isNotEmpty == true
+  Future<void> _viewClient() async {
+    setState(() => _navigating = true);
+    try {
+      final raw = await _api.getClientById(widget.clientId);
+      if (!mounted) return;
+
+      String asStr(dynamic v) => v?.toString() ?? '';
+
+      final firstName = asStr(raw['cfirstname']).trim();
+      final surname = asStr(raw['csurname']).trim();
+      final fullName = [firstName, asStr(raw['cmiddlename']).trim(), surname]
+          .where((p) => p.isNotEmpty)
+          .join(' ');
+      final displayName = fullName.isNotEmpty
+          ? fullName
+          : asStr(raw['ccompanyname']).trim().isNotEmpty
+              ? asStr(raw['ccompanyname']).trim()
+              : 'Client';
+
+      final clientMap = <String, String>{
+        'client_id': asStr(raw['id']),
+        'name': displayName,
+        // Keys read by ClientShopDetailsScreen
+        'contactPerson': displayName,
+        'contactEmail': asStr(raw['cemail']).isNotEmpty
+            ? asStr(raw['cemail'])
+            : asStr(raw['email']),
+        'contactNo': asStr(raw['cphonenum']).isNotEmpty
+            ? asStr(raw['cphonenum'])
+            : asStr(raw['phone']),
+        // Extra fields used by EditOwnerScreen / other sub-screens
+        'email': asStr(raw['cemail']).isNotEmpty
+            ? asStr(raw['cemail'])
+            : asStr(raw['email']),
+        'phone': asStr(raw['cphonenum']).isNotEmpty
+            ? asStr(raw['cphonenum'])
+            : asStr(raw['phone']),
+        'cfirstname': asStr(raw['cfirstname']),
+        'cmiddlename': asStr(raw['cmiddlename']),
+        'csurname': asStr(raw['csurname']),
+        'ccompanyname': asStr(raw['ccompanyname']),
+        'notes': asStr(raw['notes']),
+        'viberNo': asStr(raw['svibernum']),
+      };
+
+      await Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => ClientShopDetailsScreen(client: clientMap),
+        ),
+      );
+    } on ApiException catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(e.message)));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(e.toString())));
+      }
+    } finally {
+      if (mounted) setState(() => _navigating = false);
+    }
+  }
+
+  Future<void> _confirmDelete() async {    final name = _item?.clientName.isNotEmpty == true
         ? _item!.clientName
         : 'this serial number';
 
@@ -264,35 +329,26 @@ class _SerialNumberDetailScreenState extends State<SerialNumberDetailScreen> {
                 width: double.infinity,
                 height: 50,
                 child: OutlinedButton(
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => ProductDetailsEntitiesScreen(
-                          product: {
-                            'modelCode': item.shopProductId?.toString() ?? 'N/A',
-                            'supplierType': item.supplierType,
-                            'employeeName': item.clientName,
-                            'deliveryDate': _formatDate(item.createdAt),
-                            'contractDate': _formatDate(item.createdAt),
-                            'installationDate': _formatDate(item.createdAt),
-                          },
-                        ),
-                      ),
-                    );
-                  },
+                  onPressed: _navigating ? null : _viewClient,
                   style: OutlinedButton.styleFrom(
                     side: const BorderSide(color: Color(0xFFCCCCCC), width: 1.5),
                     shape:
                         RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                   ),
-                  child: const Text(
-                    'View Client',
-                    style: TextStyle(
-                        color: Colors.black87,
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600),
-                  ),
+                  child: _navigating
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                              strokeWidth: 2, color: Colors.black54),
+                        )
+                      : const Text(
+                          'View Client',
+                          style: TextStyle(
+                              color: Colors.black87,
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600),
+                        ),
                 ),
               ),
               const SizedBox(height: 10),

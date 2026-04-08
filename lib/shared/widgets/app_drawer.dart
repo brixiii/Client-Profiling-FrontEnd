@@ -75,42 +75,86 @@ class _AppDrawerState extends State<AppDrawer> {
             // ── Dynamic drawer header ─────────────────────────────────
             Container(
               width: double.infinity,
-              padding: const EdgeInsets.fromLTRB(20, 52, 20, 20),
+              height: 220,
               decoration: const BoxDecoration(
                 color: Color(0xFF87CEEB),
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              child: Stack(
+                fit: StackFit.expand,
                 children: [
-                  _DrawerAvatar(user: SessionFlags.loggedInUser),
-                  const SizedBox(height: 10),
-                  Text(
-                    _drawerDisplayName(SessionFlags.loggedInUser),
-                    style: const TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                      letterSpacing: 0.1,
-                    ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
+                  // Background image
+                  Builder(
+                    builder: (_) {
+                      final photoUrl = SessionFlags.loggedInUser?.profilePhotoUrl;
+                      if (photoUrl != null && photoUrl.isNotEmpty) {
+                        return Image.network(
+                          photoUrl,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => Container(
+                            color: const Color(0xFF87CEEB),
+                          ),
+                        );
+                      }
+                      return const SizedBox.shrink();
+                    },
                   ),
-                  const SizedBox(height: 2),
-                  const Text(
-                    'Client Profiling',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.white,
-                      fontWeight: FontWeight.w500,
+                  // Dark gradient overlay so the text is readable
+                  Container(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          Colors.black.withOpacity(0.05),
+                          Colors.black.withOpacity(0.55),
+                        ],
+                      ),
                     ),
                   ),
-                  const SizedBox(height: 1),
-                  Text(
-                    'Management System',
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: Colors.white.withOpacity(0.75),
-                      fontWeight: FontWeight.w400,
+                  // Name + subtitle at bottom-left
+                  Positioned(
+                    left: 20,
+                    bottom: 16,
+                    right: 20,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          _drawerDisplayName(SessionFlags.loggedInUser),
+                          style: const TextStyle(
+                            fontSize: 17,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                            letterSpacing: 0.1,
+                            shadows: [
+                              Shadow(
+                                blurRadius: 6,
+                                color: Colors.black54,
+                                offset: Offset(0, 1),
+                              ),
+                            ],
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          'Client Profiling',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.white.withOpacity(0.9),
+                            fontWeight: FontWeight.w500,
+                            shadows: const [
+                              Shadow(
+                                blurRadius: 4,
+                                color: Colors.black45,
+                                offset: Offset(0, 1),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ],

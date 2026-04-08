@@ -45,6 +45,8 @@ class ApiException implements Exception {
     switch (statusCode) {
       case 401:
         return 'Unauthorized. Please log in again.';
+      case 403:
+        return 'You do not have permission to perform this action.';
       case 404:
         return 'The requested resource was not found.';
       case 422:

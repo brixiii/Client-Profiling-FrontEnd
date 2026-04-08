@@ -535,7 +535,10 @@ class _EditProductDetailsScreenState extends State<EditProductDetailsScreen> {
     required ValueChanged<String?> onChanged,
     String? backendKey,
   }) {
-    final safeValue = items.contains(value) ? value : null;
+    // Deduplicate to prevent DropdownButton assertion on duplicate values
+    final seen = <String>{};
+    final uniqueItems = items.where((e) => seen.add(e)).toList();
+    final safeValue = uniqueItems.contains(value) ? value : null;
     final errorText = backendKey == null ? null : _fieldErrors[backendKey];
 
     return Column(
@@ -558,7 +561,7 @@ class _EditProductDetailsScreenState extends State<EditProductDetailsScreen> {
               isExpanded: true,
               hint: Text(hint,
                   style: TextStyle(color: Colors.grey[400], fontSize: 14)),
-              items: items
+              items: uniqueItems
                   .map((item) => DropdownMenuItem(
                         value: item,
                         child: Text(item,

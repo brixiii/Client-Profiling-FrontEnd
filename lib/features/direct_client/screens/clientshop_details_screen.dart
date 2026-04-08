@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../shared/api/api_exception.dart';
+import '../../../shared/session_flags.dart';
 import '../../../shared/models/shop.dart';
 import '../../../shared/widgets/custom_app_bar.dart';
 import '../providers/client_shops_provider.dart';
@@ -58,123 +59,227 @@ class _ClientShopDetailsScreenState
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'Client Details',
-              style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.black87),
-            ),
-            const SizedBox(height: 10),
+            // ── Client Details Card ────────────────────────────
             Container(
               width: double.infinity,
-              padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
                 color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.07),
+                    blurRadius: 16,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _infoRow('Name:', client['contactPerson'] ?? '-'),
-                  _divider(),
-                  _infoRow(
-                    'Company Name:',
-                    client['ccompanyname']?.trim().isNotEmpty == true
-                        ? client['ccompanyname']!
-                        : (client['companyName'] ?? '-'),
+                  // Gradient header band
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
+                    decoration: const BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [Color(0xFF87CEEB), Color(0xFF2563EB)],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      borderRadius: BorderRadius.only(
+                        topLeft: Radius.circular(16),
+                        topRight: Radius.circular(16),
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 56,
+                          height: 56,
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.2),
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(
+                                color: Colors.white.withOpacity(0.4),
+                                width: 1.5),
+                          ),
+                          child: Center(
+                            child: Text(
+                              ((client['contactPerson'] ??
+                                          client['ccompanyname'] ??
+                                          '?')
+                                      .isNotEmpty
+                                  ? (client['contactPerson'] ??
+                                          client['ccompanyname'] ??
+                                          '?')
+                                      .substring(0, 1)
+                                      .toUpperCase()
+                                  : '?'),
+                              style: const TextStyle(
+                                fontSize: 24,
+                                fontWeight: FontWeight.w800,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                client['contactPerson'] ?? '-',
+                                style: const TextStyle(
+                                  fontSize: 17,
+                                  fontWeight: FontWeight.w700,
+                                  color: Colors.white,
+                                ),
+                              ),
+                              const SizedBox(height: 5),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 10, vertical: 3),
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withOpacity(0.2),
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                                child: const Text(
+                                  'Client Account',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                  _divider(),
-                  _infoRow('Email:', client['contactEmail'] ?? '-'),
-                  _divider(),
-                  _infoRow('Phone No.:', client['contactNo'] ?? '-'),
-                  const SizedBox(height: 16),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: ElevatedButton.icon(
-                          onPressed: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => EditOwnerScreen(client: client),
-                              ),
-                            );
-                          },
-                          icon: const Icon(Icons.edit,
-                              color: Colors.white, size: 18),
-                          label: const Text(
-                            'Edit',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w600,
-                              fontSize: 15,
-                            ),
-                          ),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF2563EB),
-                            padding: const EdgeInsets.symmetric(vertical: 14),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(30),
-                            ),
-                            elevation: 0,
-                          ),
+                  // Info rows
+                  Padding(
+                    padding: const EdgeInsets.all(20),
+                    child: Column(
+                      children: [
+                        _buildInfoRow(Icons.person_outline, 'Name',
+                            client['contactPerson'] ?? '-'),
+                        const SizedBox(height: 14),
+                        _buildInfoRow(
+                          Icons.business_outlined,
+                          'Company Name',
+                          client['ccompanyname']?.trim().isNotEmpty == true
+                              ? client['ccompanyname']!
+                              : (client['companyName'] ?? '-'),
                         ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: ElevatedButton.icon(
-                          onPressed: () async {
-                            final confirmed = await showDialog<bool>(
-                              context: context,
-                              builder: (context) => AlertDialog(
-                                title: const Text('Delete Client'),
-                                content: const Text(
-                                    'Are you sure you want to delete this client? This action cannot be undone.'),
-                                actions: [
-                                  TextButton(
-                                    onPressed: () =>
-                                        Navigator.pop(context, false),
-                                    child: const Text('Cancel'),
-                                  ),
-                                  ElevatedButton(
-                                    onPressed: () =>
-                                        Navigator.pop(context, true),
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: const Color(0xFFEF4444),
-                                      foregroundColor: Colors.white,
-                                      elevation: 0,
+                        const SizedBox(height: 14),
+                        _buildInfoRow(Icons.email_outlined, 'Email',
+                            client['contactEmail'] ?? '-'),
+                        const SizedBox(height: 14),
+                        _buildInfoRow(Icons.phone_outlined, 'Phone No.',
+                            client['contactNo'] ?? '-'),
+                        const SizedBox(height: 20),
+                        // Pill action buttons
+                        Row(
+                          children: [
+                            Expanded(
+                              child: ElevatedButton.icon(
+                                onPressed: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) =>
+                                          EditOwnerScreen(client: client),
                                     ),
-                                    child: const Text('Delete'),
+                                  );
+                                },
+                                icon: const Icon(Icons.edit_outlined, size: 18),
+                                label: const Text('Edit'),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFF2563EB),
+                                  foregroundColor: Colors.white,
+                                  padding:
+                                      const EdgeInsets.symmetric(vertical: 13),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(30),
                                   ),
-                                ],
+                                  elevation: 0,
+                                  textStyle: const TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w600),
+                                ),
                               ),
-                            );
-                            if (confirmed == true) {
-                              Navigator.pop(context);
-                            }
-                          },
-                          icon: const Icon(Icons.delete,
-                              color: Colors.white, size: 18),
-                          label: const Text(
-                            'Delete',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w600,
-                              fontSize: 15,
                             ),
-                          ),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFFEF4444),
-                            padding: const EdgeInsets.symmetric(vertical: 14),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(30),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: ElevatedButton.icon(
+                                onPressed:
+                                    SessionFlags.userRole != 'Super Admin'
+                                        ? null
+                                        : () async {
+                                            final confirmed =
+                                                await showDialog<bool>(
+                                              context: context,
+                                              builder: (context) => AlertDialog(
+                                                title: const Text(
+                                                    'Delete Client'),
+                                                content: const Text(
+                                                    'Are you sure you want to delete this client? This action cannot be undone.'),
+                                                actions: [
+                                                  TextButton(
+                                                    onPressed: () =>
+                                                        Navigator.pop(
+                                                            context, false),
+                                                    child:
+                                                        const Text('Cancel'),
+                                                  ),
+                                                  ElevatedButton(
+                                                    onPressed: () =>
+                                                        Navigator.pop(
+                                                            context, true),
+                                                    style: ElevatedButton
+                                                        .styleFrom(
+                                                      backgroundColor:
+                                                          const Color(
+                                                              0xFFEF4444),
+                                                      foregroundColor:
+                                                          Colors.white,
+                                                      elevation: 0,
+                                                    ),
+                                                    child:
+                                                        const Text('Delete'),
+                                                  ),
+                                                ],
+                                              ),
+                                            );
+                                            if (confirmed == true) {
+                                              Navigator.pop(context);
+                                            }
+                                          },
+                                icon:
+                                    const Icon(Icons.delete_outline, size: 18),
+                                label: const Text('Delete'),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFFEF4444),
+                                  foregroundColor: Colors.white,
+                                  padding:
+                                      const EdgeInsets.symmetric(vertical: 13),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(30),
+                                  ),
+                                  elevation: 0,
+                                  textStyle: const TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w600),
+                                ),
+                              ),
                             ),
-                            elevation: 0,
-                          ),
+                          ],
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ],
               ),
@@ -487,30 +592,39 @@ class _ClientShopDetailsScreenState
     );
   }
 
-  Widget _infoRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 10),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 120,
-            child: Text(label,
-                style: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.black87)),
+  Widget _buildInfoRow(IconData icon, String label, String value) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: 34,
+          height: 34,
+          decoration: BoxDecoration(
+            color: const Color(0xFF2563EB).withOpacity(0.07),
+            borderRadius: BorderRadius.circular(9),
           ),
-          Expanded(
-            child: Text(value,
-                style: const TextStyle(fontSize: 13, color: Colors.black87)),
+          child: Icon(icon, size: 17, color: const Color(0xFF2563EB)),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(label,
+                  style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.grey[500])),
+              const SizedBox(height: 2),
+              Text(value,
+                  style: const TextStyle(
+                      fontSize: 14, color: Colors.black87, height: 1.4)),
+            ],
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
-
-  Widget _divider() => Divider(height: 1, color: Colors.grey[200]);
 }
 
 class _PaginationButton extends StatelessWidget {

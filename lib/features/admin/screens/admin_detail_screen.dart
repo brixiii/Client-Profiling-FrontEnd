@@ -82,7 +82,7 @@ class _AdminDetailScreenState extends State<AdminDetailScreen> {
                     fontWeight: FontWeight.w600,
                   ),
                 ),
-                child: const Text('Update'),
+                child: const Text('Edit'),
               ),
             ),
             const SizedBox(height: 12),

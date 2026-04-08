@@ -15,7 +15,7 @@ class _AddEmployeeScreenState extends State<AddEmployeeScreen> {
   final _fullNameController = TextEditingController();
   String? _selectedRole;
 
-  final List<String> _roles = ['Super Admin', 'Admin', 'Salesperson', 'Technician'];
+  final List<String> _roles = ['Salesperson', 'Technician', 'Customer Representative'];
   bool _isSaving = false;
   final _api = BackendApi();
 
@@ -128,9 +128,9 @@ class _AddEmployeeScreenState extends State<AddEmployeeScreen> {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _isSaving = true);
     try {
-      await _api.createUser({
-        'name': _fullNameController.text.trim(),
-        'role': _selectedRole,
+      await _api.createEmployee({
+        'efullname': _fullNameController.text.trim(),
+        'employee_type_id': _selectedRole,
       });
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(

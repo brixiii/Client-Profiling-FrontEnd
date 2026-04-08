@@ -6,6 +6,7 @@ import '../../../features/serial_number/models/serial_number_model.dart';
 import '../../../features/serial_number/screens/serial_number_detail_screen.dart';
 import '../../../shared/api/api_exception.dart';
 import '../../../shared/api/backend_api.dart';
+import '../../../shared/session_flags.dart';
 import '../../../shared/models/product.dart';
 import '../../../shared/widgets/custom_app_bar.dart';
 import 'edit_product_details_screen.dart';
@@ -356,153 +357,257 @@ class _ProductDetailsEntitiesScreenState
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'Product Details',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                color: Colors.black87,
-              ),
-            ),
-            const SizedBox(height: 8),
+            // ── Product Details Card ────────────────────────
             Container(
               width: double.infinity,
-              padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
               decoration: BoxDecoration(
                 color: Colors.white,
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(16),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.05),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2),
+                    color: Colors.black.withOpacity(0.07),
+                    blurRadius: 16,
+                    offset: const Offset(0, 4),
                   ),
                 ],
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  if (_errorText != null) ...[
-                    Text(
-                      _errorText!,
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: Color(0xFFB91C1C),
-                        fontWeight: FontWeight.w500,
+                  // Gradient header band
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
+                    decoration: const BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [Color(0xFF87CEEB), Color(0xFF2563EB)],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      borderRadius: BorderRadius.only(
+                        topLeft: Radius.circular(16),
+                        topRight: Radius.circular(16),
                       ),
                     ),
-                    const SizedBox(height: 8),
-                  ],
-                  _infoRow('Model Code', modelCode.isEmpty ? '-' : modelCode),
-                  _divider(),
-                  _infoRow('Supplier Type',
-                      supplierType.isEmpty ? '-' : supplierType),
-                  _divider(),
-                  _infoRow('UOM', uom.isEmpty ? '-' : uom),
-                  _divider(),
-                  _infoRow('Quantity', quantity),
-                  _divider(),
-                  _infoRow('PO Number', poNumber),
-                  _divider(),
-                  _infoRow('DR Number', drNumber),
-                  _divider(),
-                  _infoRow('Contract Date',
-                      contractDate.isEmpty ? '-' : contractDate),
-                  _divider(),
-                  _infoRow('Delivery Date',
-                      deliveryDate.isEmpty ? '-' : deliveryDate),
-                  _divider(),
-                  _infoRow('Installation Date',
-                      installationDate.isEmpty ? '-' : installationDate),
-                  _divider(),
-                  _infoRow('Employee Name', employeeName),
-                  const SizedBox(height: 16),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: ElevatedButton.icon(
-                          onPressed: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => EditProductDetailsScreen(
-                                  product: widget.product,
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 56,
+                          height: 56,
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.2),
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(
+                                color: Colors.white.withOpacity(0.4),
+                                width: 1.5),
+                          ),
+                          child: Center(
+                            child: Text(
+                              (_product?.modelName ??
+                                          widget.product['modelName'] ??
+                                          '')
+                                      .isNotEmpty
+                                  ? (_product?.modelName ??
+                                          widget.product['modelName'] ??
+                                          '')
+                                      .substring(0, 1)
+                                      .toUpperCase()
+                                  : '?',
+                              style: const TextStyle(
+                                fontSize: 24,
+                                fontWeight: FontWeight.w800,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                _product?.modelName ??
+                                    widget.product['modelName'] ??
+                                    '-',
+                                style: const TextStyle(
+                                  fontSize: 17,
+                                  fontWeight: FontWeight.w700,
+                                  color: Colors.white,
                                 ),
                               ),
-                            ).then((_) => _loadProduct());
-                          },
-                          icon: const Icon(Icons.edit, size: 18),
-                          label: const Text(
-                            'Edit',
-                            style: TextStyle(
-                              fontWeight: FontWeight.w600,
-                              fontSize: 15,
-                            ),
-                          ),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF2563EB),
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(vertical: 14),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(30),
-                            ),
-                            elevation: 0,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: ElevatedButton.icon(
-                          onPressed: () async {
-                            final confirmed = await showDialog<bool>(
-                              context: context,
-                              builder: (context) => AlertDialog(
-                                title: const Text('Delete Product'),
-                                content: const Text(
-                                    'Are you sure you want to delete this product? This action cannot be undone.'),
-                                actions: [
-                                  TextButton(
-                                    onPressed: () =>
-                                        Navigator.pop(context, false),
-                                    child: const Text('Cancel'),
+                              const SizedBox(height: 5),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 10, vertical: 3),
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withOpacity(0.2),
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                                child: const Text(
+                                  'Product Details',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w500,
                                   ),
-                                  ElevatedButton(
-                                    onPressed: () =>
-                                        Navigator.pop(context, true),
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: const Color(0xFFEF4444),
-                                      foregroundColor: Colors.white,
-                                      elevation: 0,
-                                    ),
-                                    child: const Text('Delete'),
-                                  ),
-                                ],
+                                ),
                               ),
-                            );
-                            if (confirmed == true) {
-                              await _deleteProduct();
-                            }
-                          },
-                          icon: const Icon(Icons.delete, size: 18),
-                          label: const Text(
-                            'Delete',
-                            style: TextStyle(
-                              fontWeight: FontWeight.w600,
-                              fontSize: 15,
-                            ),
-                          ),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFFEF4444),
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(vertical: 14),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(30),
-                            ),
-                            elevation: 0,
+                            ],
                           ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
+                  ),
+                  // Info rows
+                  Padding(
+                    padding: const EdgeInsets.all(20),
+                    child: Column(
+                      children: [
+                        if (_errorText != null) ...[
+                          Text(
+                            _errorText!,
+                            style: const TextStyle(
+                                fontSize: 12,
+                                color: Color(0xFFB91C1C),
+                                fontWeight: FontWeight.w500),
+                          ),
+                          const SizedBox(height: 12),
+                        ],
+                        _buildInfoRow(Icons.qr_code_outlined, 'Model Code',
+                            modelCode.isEmpty ? '-' : modelCode),
+                        const SizedBox(height: 14),
+                        _buildInfoRow(Icons.local_offer_outlined,
+                            'Supplier Type',
+                            supplierType.isEmpty ? '-' : supplierType),
+                        const SizedBox(height: 14),
+                        _buildInfoRow(Icons.straighten_outlined, 'UOM',
+                            uom.isEmpty ? '-' : uom),
+                        const SizedBox(height: 14),
+                        _buildInfoRow(
+                            Icons.inventory_2_outlined, 'Quantity', quantity),
+                        const SizedBox(height: 14),
+                        _buildInfoRow(
+                            Icons.receipt_outlined, 'PO Number', poNumber),
+                        const SizedBox(height: 14),
+                        _buildInfoRow(
+                            Icons.description_outlined, 'DR Number', drNumber),
+                        const SizedBox(height: 14),
+                        _buildInfoRow(Icons.event_outlined, 'Contract Date',
+                            contractDate.isEmpty ? '-' : contractDate),
+                        const SizedBox(height: 14),
+                        _buildInfoRow(Icons.calendar_today_outlined,
+                            'Delivery Date',
+                            deliveryDate.isEmpty ? '-' : deliveryDate),
+                        const SizedBox(height: 14),
+                        _buildInfoRow(Icons.build_outlined, 'Installation Date',
+                            installationDate.isEmpty ? '-' : installationDate),
+                        const SizedBox(height: 14),
+                        _buildInfoRow(Icons.person_outline, 'Employee Name',
+                            employeeName),
+                        const SizedBox(height: 20),
+                        // Pill action buttons
+                        Row(
+                          children: [
+                            Expanded(
+                              child: ElevatedButton.icon(
+                                onPressed: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) =>
+                                          EditProductDetailsScreen(
+                                        product: widget.product,
+                                      ),
+                                    ),
+                                  ).then((_) => _loadProduct());
+                                },
+                                icon: const Icon(Icons.edit_outlined, size: 18),
+                                label: const Text('Edit'),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFF2563EB),
+                                  foregroundColor: Colors.white,
+                                  padding: const EdgeInsets.symmetric(
+                                      vertical: 13),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(30),
+                                  ),
+                                  elevation: 0,
+                                  textStyle: const TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w600),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: ElevatedButton.icon(
+                                onPressed:
+                                    SessionFlags.userRole != 'Super Admin'
+                                        ? null
+                                        : () async {
+                                            final confirmed =
+                                                await showDialog<bool>(
+                                              context: context,
+                                              builder: (context) =>
+                                                  AlertDialog(
+                                                title: const Text(
+                                                    'Delete Product'),
+                                                content: const Text(
+                                                    'Are you sure you want to delete this product? This action cannot be undone.'),
+                                                actions: [
+                                                  TextButton(
+                                                    onPressed: () =>
+                                                        Navigator.pop(
+                                                            context, false),
+                                                    child: const Text(
+                                                        'Cancel'),
+                                                  ),
+                                                  ElevatedButton(
+                                                    onPressed: () =>
+                                                        Navigator.pop(
+                                                            context, true),
+                                                    style: ElevatedButton
+                                                        .styleFrom(
+                                                      backgroundColor:
+                                                          const Color(
+                                                              0xFFEF4444),
+                                                      foregroundColor:
+                                                          Colors.white,
+                                                      elevation: 0,
+                                                    ),
+                                                    child: const Text(
+                                                        'Delete'),
+                                                  ),
+                                                ],
+                                              ),
+                                            );
+                                            if (confirmed == true) {
+                                              await _deleteProduct();
+                                            }
+                                          },
+                                icon:
+                                    const Icon(Icons.delete_outline, size: 18),
+                                label: const Text('Delete'),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFFEF4444),
+                                  foregroundColor: Colors.white,
+                                  padding: const EdgeInsets.symmetric(
+                                      vertical: 13),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(30),
+                                  ),
+                                  elevation: 0,
+                                  textStyle: const TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w600),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
                   ),
                 ],
               ),
@@ -622,36 +727,39 @@ class _ProductDetailsEntitiesScreenState
     );
   }
 
-  Widget _infoRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 10),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 130,
-            child: Text(
-              label,
-              style: const TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color: Colors.black87,
-              ),
-            ),
+  Widget _buildInfoRow(IconData icon, String label, String value) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: 34,
+          height: 34,
+          decoration: BoxDecoration(
+            color: const Color(0xFF2563EB).withOpacity(0.07),
+            borderRadius: BorderRadius.circular(9),
           ),
-          Expanded(
-            child: Text(
-              value,
-              textAlign: TextAlign.right,
-              style: const TextStyle(fontSize: 13, color: Colors.black87),
-            ),
+          child: Icon(icon, size: 17, color: const Color(0xFF2563EB)),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(label,
+                  style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.grey[500])),
+              const SizedBox(height: 2),
+              Text(value,
+                  style: const TextStyle(
+                      fontSize: 14, color: Colors.black87, height: 1.4)),
+            ],
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
-
-  Widget _divider() => Divider(height: 1, color: Colors.grey[200]);
 
   Widget _buildSearchField(String hint) {
     return SizedBox(
@@ -789,26 +897,7 @@ class _ProductDetailsEntitiesScreenState
                     ],
                   ),
                 ),
-                const SizedBox(width: 4),
-                InkWell(
-                  onTap: () => _showEditSerialDialog(sn),
-                  borderRadius: BorderRadius.circular(4),
-                  child: const Padding(
-                    padding: EdgeInsets.all(4),
-                    child: Icon(Icons.edit_outlined,
-                        size: 16, color: Color(0xFF2563EB)),
-                  ),
-                ),
-                const SizedBox(width: 2),
-                InkWell(
-                  onTap: () => _deleteSerialNumber(sn),
-                  borderRadius: BorderRadius.circular(4),
-                  child: const Padding(
-                    padding: EdgeInsets.all(4),
-                    child: Icon(Icons.delete_outlined,
-                        size: 16, color: Color(0xFFEF4444)),
-                  ),
-                ),
+
               ],
             ),
           ),

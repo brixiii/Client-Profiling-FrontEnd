@@ -2,6 +2,7 @@
 import '../../../shared/api/api_exception.dart';
 import '../../../shared/api/backend_api.dart';
 import '../../../shared/models/csr_guide_section.dart';
+import '../../../shared/session_flags.dart';
 import '../../../shared/widgets/app_drawer.dart';
 import '../../../shared/widgets/custom_app_bar.dart';
 import 'csr_guide_content_screen.dart';
@@ -293,6 +294,7 @@ class _CsrGuideScreenState extends State<CsrGuideScreen> {
                               ),
                             ),
                           ),
+                          if (SessionFlags.userRole == 'Super Admin')
                           GestureDetector(
                             onTap: () => _showAddDialog(section.title),
                             child: Padding(
@@ -349,6 +351,7 @@ class _CsrGuideScreenState extends State<CsrGuideScreen> {
                                   ),
                                 ),
                               ),
+                              if (SessionFlags.userRole == 'Super Admin') ...[
                               GestureDetector(
                                 onTap: () => _showEditDialog(child),
                                 child: Padding(
@@ -367,6 +370,7 @@ class _CsrGuideScreenState extends State<CsrGuideScreen> {
                                       size: 15, color: Colors.redAccent),
                                 ),
                               ),
+                              ],
                             ],
                           ),
                         ),
