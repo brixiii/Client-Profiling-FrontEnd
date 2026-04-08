@@ -1,4 +1,6 @@
-﻿import 'package:flutter/material.dart';
+﻿import 'dart:async';
+
+import 'package:flutter/material.dart';
 import '../../../shared/api/backend_api.dart';
 import '../../../shared/api/paginated_response.dart';
 import '../../../shared/models/reseller.dart';
@@ -18,6 +20,7 @@ class ResellersScreen extends StatefulWidget {
 
 class _ResellersScreenState extends State<ResellersScreen> {
   final TextEditingController _searchController = TextEditingController();
+  Timer? _searchDebounce;
   int _entriesPerPage = 5;
   int _currentPage = 1;
   String _searchQuery = '';
@@ -76,6 +79,7 @@ class _ResellersScreenState extends State<ResellersScreen> {
 
   @override
   void dispose() {
+    _searchDebounce?.cancel();
     _searchController.dispose();
     super.dispose();
   }
@@ -196,88 +200,45 @@ class _ResellersScreenState extends State<ResellersScreen> {
                   ),
                   const SizedBox(height: 16),
 
-                  // Controls Row - Entries dropdown and Search
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      // Entries per page
-                      Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8),
-                            decoration: BoxDecoration(
-                              border: Border.all(color: Colors.grey[300]!),
-                              borderRadius: BorderRadius.circular(6),
-                            ),
-                            child: DropdownButton<int>(
-                              value: _entriesPerPage,
-                              underline: const SizedBox(),
-                              items: [5, 10, 25, 50].map((int value) {
-                                return DropdownMenuItem<int>(
-                                  value: value,
-                                  child: Text(value.toString()),
-                                );
-                              }).toList(),
-                              onChanged: (value) {
-                                setState(() {
-                                  _entriesPerPage = value!;
-                                  _currentPage = 1;
-                                });
-                                _fetchResellers();
-                              },
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Text(
-                            'entries per page',
-                            style: TextStyle(
-                              fontSize: 13,
-                              color: Colors.grey[600],
-                            ),
-                          ),
-                        ],
+                  // Search field
+                  TextField(
+                    controller: _searchController,
+                    onChanged: (value) {
+                      setState(() {
+                        _searchQuery = value;
+                        _currentPage = 1;
+                      });
+                      _searchDebounce?.cancel();
+                      _searchDebounce = Timer(
+                        const Duration(milliseconds: 400),
+                        () {
+                          if (mounted) _fetchResellers();
+                        },
+                      );
+                    },
+                    decoration: InputDecoration(
+                      hintText: 'Search:',
+                      hintStyle: TextStyle(
+                        fontSize: 13,
+                        color: Colors.grey[400],
                       ),
-
-                      // Search field
-                      Expanded(
-                        child: Container(
-                          margin: const EdgeInsets.only(left: 16),
-                          child: TextField(
-                            controller: _searchController,
-                            onChanged: (value) {
-                              setState(() {
-                                _searchQuery = value;
-                                _currentPage = 1;
-                              });
-                              _fetchResellers();
-                            },
-                            decoration: InputDecoration(
-                              hintText: 'Search:',
-                              hintStyle: TextStyle(
-                                fontSize: 13,
-                                color: Colors.grey[400],
-                              ),
-                              contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 12,
-                                vertical: 8,
-                              ),
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(6),
-                                borderSide: BorderSide(color: Colors.grey[300]!),
-                              ),
-                              enabledBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(6),
-                                borderSide: BorderSide(color: Colors.grey[300]!),
-                              ),
-                              focusedBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(6),
-                                borderSide: const BorderSide(color: Color(0xFF2563EB)),
-                              ),
-                            ),
-                          ),
-                        ),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
                       ),
-                    ],
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(6),
+                        borderSide: BorderSide(color: Colors.grey[300]!),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(6),
+                        borderSide: BorderSide(color: Colors.grey[300]!),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(6),
+                        borderSide: const BorderSide(color: Color(0xFF2563EB)),
+                      ),
+                    ),
                   ),
                   const SizedBox(height: 16),
 
@@ -386,6 +347,7 @@ class _ResellersScreenState extends State<ResellersScreen> {
                                   fontSize: 13,
                                   color: Colors.black87,
                                 ),
+                                overflow: TextOverflow.ellipsis,
                               ),
                             ),
                             Expanded(
@@ -407,6 +369,7 @@ class _ResellersScreenState extends State<ResellersScreen> {
                                   fontSize: 13,
                                   color: Colors.black87,
                                 ),
+                                overflow: TextOverflow.ellipsis,
                               ),
                             ),
                             SizedBox(

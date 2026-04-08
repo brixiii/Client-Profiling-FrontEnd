@@ -102,6 +102,19 @@ class BackendApi {
     return User.fromJson(data);
   }
 
+  /// Changes the authenticated user's password.
+  Future<void> changePassword({
+    required String oldPassword,
+    required String newPassword,
+    required String newPasswordConfirmation,
+  }) async {
+    await _api.put('/change-password', body: {
+      'old_password': oldPassword,
+      'new_password': newPassword,
+      'new_password_confirmation': newPasswordConfirmation,
+    });
+  }
+
   /// Uploads a profile photo via multipart/form-data (mobile — uses file path).
   /// Returns the new absolute [profile_photo_url] on success.
   Future<String?> uploadProfilePhoto(String filePath) async {

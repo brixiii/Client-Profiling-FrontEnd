@@ -33,7 +33,7 @@ class _EmployeeDetailScreenState extends State<EmployeeDetailScreen> {
           ),
         ],
       ),
-      body: Padding(
+      body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -51,12 +51,11 @@ class _EmployeeDetailScreenState extends State<EmployeeDetailScreen> {
             _buildField('Name', employee.name),
             _buildField('Role', employee.role),
 
-            const Spacer(),
+            const SizedBox(height: 32),
 
             // Update button (yellow)
             SizedBox(
               width: double.infinity,
-              height: 50,
               child: ElevatedButton(
                 onPressed: () async {
                   final result = await Navigator.push(
@@ -87,7 +86,6 @@ class _EmployeeDetailScreenState extends State<EmployeeDetailScreen> {
             // Delete button (red)
             SizedBox(
               width: double.infinity,
-              height: 50,
               child: ElevatedButton(
                 onPressed: _isDeleting ? null : () => _confirmDelete(context),
                 style: ElevatedButton.styleFrom(

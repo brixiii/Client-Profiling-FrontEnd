@@ -7,6 +7,7 @@ import '../../../shared/api/paginated_response.dart';
 import '../../../shared/models/shop.dart';
 import '../../../shared/session_flags.dart';
 import '../../../shared/widgets/custom_app_bar.dart';
+import '../../service_type/models/service_type_model.dart';
 
 class DayClientsScreen extends StatefulWidget {
   final DateTime date;
@@ -475,9 +476,11 @@ class _EditScheduleDialogState extends State<_EditScheduleDialog> {
     _nameType = c.nameType;
     _shop = c.shop;
     _serviceType = c.serviceType;
-    _technicians = List<String>.from(c.technicians.length == 5
-        ? c.technicians
-        : List.filled(5, 'N/A'));
+    // Preserve original technician names (padded to 5 slots with 'N/A').
+    // They will be re-resolved against loaded options in _loadDeps().
+    final rawTechs = List<String>.from(c.technicians);
+    _technicians = List.generate(
+        5, (i) => i < rawTechs.length ? rawTechs[i].trim() : 'N/A');
     _selectedDate = widget.currentDate;
     _loadDeps();
   }
@@ -499,39 +502,41 @@ class _EditScheduleDialogState extends State<_EditScheduleDialog> {
   Future<void> _loadDeps() async {
     setState(() => _isLoadingDeps = true);
     try {
-      final results = await Future.wait([
-        _api.getShops(page: 1, perPage: 100).catchError((_) =>
-            PaginatedResponse<Shop>(
-                data: const [],
-                currentPage: 1,
-                perPage: 100,
-                total: 0,
-                lastPage: 1,
-                links: const [])),
-        _api.getServiceTypes(page: 1, perPage: 100).catchError((_) =>
-            PaginatedResponse<Map<String, dynamic>>(
-                data: const [],
-                currentPage: 1,
-                perPage: 100,
-                total: 0,
-                lastPage: 1,
-                links: const [])),
-        _api.getCalendarEmployees(page: 1, perPage: 100).catchError((_) =>
-            PaginatedResponse<Map<String, dynamic>>(
-                data: const [],
-                currentPage: 1,
-                perPage: 100,
-                total: 0,
-                lastPage: 1,
-                links: const [])),
-      ]);
+      // Await each call separately with correct types to avoid _CastError
+      final shopResp = await _api
+          .getShops(page: 1, perPage: 100)
+          .catchError((_) => PaginatedResponse<Shop>(
+              data: const [],
+              currentPage: 1,
+              perPage: 100,
+              total: 0,
+              lastPage: 1,
+              links: const []));
+      final stResp = await _api
+          .getServiceTypes(page: 1, perPage: 100)
+          .catchError((_) => PaginatedResponse<ServiceTypeModel>(
+              data: const [],
+              currentPage: 1,
+              perPage: 100,
+              total: 0,
+              lastPage: 1,
+              links: const []));
+      final empResp = await _api
+          .getCalendarEmployees(page: 1, perPage: 100)
+          .catchError((_) => PaginatedResponse<Map<String, dynamic>>(
+              data: const [],
+              currentPage: 1,
+              perPage: 100,
+              total: 0,
+              lastPage: 1,
+              links: const []));
       if (!mounted) return;
 
-      final shops = (results[0] as PaginatedResponse<Shop>).data;
-      final serviceTypes =
-          (results[1] as PaginatedResponse<Map<String, dynamic>>).data;
-      final employees =
-          (results[2] as PaginatedResponse<Map<String, dynamic>>).data;
+      final shops = shopResp.data;
+      final serviceTypes = stResp.data
+          .map((s) => <String, dynamic>{'id': s.id, 'setypename': s.setypename})
+          .toList();
+      final employees = empResp.data;
 
       final shopNames = shops.map((s) => s.shopname).toList();
       final shopIdByName = <String, int>{
@@ -589,6 +594,14 @@ class _EditScheduleDialogState extends State<_EditScheduleDialog> {
               .map((s) => (s['setypename'] ?? '').toString().trim())
               .firstOrNull;
           if (match != null) _serviceType = match;
+        }
+
+        // Re-resolve technicians: keep names that exist in loaded options,
+        // fallback to 'N/A' for any that are missing.
+        for (int i = 0; i < _technicians.length; i++) {
+          if (!techNames.contains(_technicians[i])) {
+            _technicians[i] = 'N/A';
+          }
         }
 
         _isLoadingDeps = false;
@@ -775,15 +788,10 @@ class _EditScheduleDialogState extends State<_EditScheduleDialog> {
                   ),
                   const SizedBox(height: 12),
 
-                  // Shop dropdown
+                  // Shop (read-only)
                   _buildLabel('Shop'),
                   const SizedBox(height: 6),
-                  _buildDropdown<String>(
-                    value: _shop,
-                    items: _shopNames,
-                    onChanged: (v) => setState(() => _shop = v!),
-                    labelFn: (v) => v,
-                  ),
+                  _buildReadOnlyField(_shop),
                   const SizedBox(height: 12),
 
                   // Address Location
@@ -825,13 +833,7 @@ class _EditScheduleDialogState extends State<_EditScheduleDialog> {
                           children: [
                             _buildLabel('Type Of Service'),
                             const SizedBox(height: 6),
-                            _buildDropdown<String>(
-                              value: _serviceType,
-                              items: _serviceTypeNames,
-                              onChanged: (v) =>
-                                  setState(() => _serviceType = v!),
-                              labelFn: (v) => v,
-                            ),
+                            _buildReadOnlyField(_serviceType),
                           ],
                         ),
                       ),
@@ -893,7 +895,7 @@ class _EditScheduleDialogState extends State<_EditScheduleDialog> {
                   ),
                   const SizedBox(height: 12),
 
-                  // Technician
+                  // Technician (read-only)
                   _buildLabel('Technician'),
                   const SizedBox(height: 6),
                   Wrap(
@@ -905,13 +907,7 @@ class _EditScheduleDialogState extends State<_EditScheduleDialog> {
                                     56 -
                                     32) /
                                 2.5,
-                        child: _buildDropdown<String>(
-                          value: _technicians[i],
-                          items: _technicianOptions,
-                          onChanged: (v) => setState(
-                              () => _technicians[i] = v!),
-                          labelFn: (v) => v,
-                        ),
+                        child: _buildReadOnlyField(_technicians[i]),
                       );
                     }),
                   ),
@@ -1137,13 +1133,34 @@ class _EditScheduleDialogState extends State<_EditScheduleDialog> {
     );
   }
 
+  Widget _buildReadOnlyField(String value) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF5F7FA),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: Colors.grey[300]!),
+      ),
+      child: Text(
+        value.isEmpty ? '—' : value,
+        style: const TextStyle(fontSize: 13, color: Colors.black87),
+        overflow: TextOverflow.ellipsis,
+      ),
+    );
+  }
+
   Widget _buildDropdown<T>({
     required T value,
     required List<T> items,
     required ValueChanged<T?> onChanged,
     required String Function(T) labelFn,
   }) {
-    final safeValue = items.contains(value) ? value : (items.isNotEmpty ? items.first : value);
+    // Deduplicate items to prevent DropdownButton assertion error
+    final uniqueItems = items.toSet().toList();
+    final safeValue = uniqueItems.contains(value)
+        ? value
+        : (uniqueItems.isNotEmpty ? uniqueItems.first : null);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10),
       decoration: BoxDecoration(
@@ -1157,7 +1174,7 @@ class _EditScheduleDialogState extends State<_EditScheduleDialog> {
           isExpanded: true,
           isDense: true,
           style: const TextStyle(fontSize: 13, color: Colors.black87),
-          items: items
+          items: uniqueItems
               .map((e) => DropdownMenuItem<T>(
                     value: e,
                     child: Text(labelFn(e),

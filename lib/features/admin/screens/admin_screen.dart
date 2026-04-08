@@ -144,12 +144,12 @@ class _AdminScreenState extends State<AdminScreen> {
                   childAspectRatio: 1.5,
                   children: [
                     AnalyticsCard(
-                      title: 'Number of Admins',
+                      title: 'Admins',
                       value: _adminTotal.toString(),
                       backgroundColor: const Color(0xFFB3E5FC),
                     ),
                     AnalyticsCard(
-                      title: 'Number of Employee',
+                      title: 'Employees',
                       value: _employeeTotal.toString(),
                       backgroundColor: const Color(0xFFB3E5FC),
                     ),
@@ -395,10 +395,7 @@ class _AdminScreenState extends State<AdminScreen> {
     required TextEditingController controller,
     required ValueChanged<String> onChanged,
   }) {
-    return Row(
-      children: [
-        Expanded(
-          child: TextField(
+    return TextField(
             controller: controller,
             onChanged: onChanged,
             decoration: InputDecoration(
@@ -419,25 +416,6 @@ class _AdminScreenState extends State<AdminScreen> {
                 borderSide: const BorderSide(color: Color(0xFF2563EB)),
               ),
             ),
-          ),
-        ),
-        const SizedBox(width: 8),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-          decoration: BoxDecoration(
-            border: Border.all(color: Colors.grey[300]!),
-            borderRadius: BorderRadius.circular(6),
-          ),
-          child: Row(
-            children: [
-              Text('Filter',
-                  style: TextStyle(fontSize: 13, color: Colors.grey[600])),
-              const SizedBox(width: 4),
-              Icon(Icons.filter_list, size: 16, color: Colors.grey[600]),
-            ],
-          ),
-        ),
-      ],
     );
   }
 
@@ -495,12 +473,14 @@ class _AdminScreenState extends State<AdminScreen> {
           Expanded(
             flex: 3,
             child: Text(user.name,
-                style: const TextStyle(fontSize: 13, color: Colors.black87)),
+                style: const TextStyle(fontSize: 13, color: Colors.black87),
+                overflow: TextOverflow.ellipsis),
           ),
           Expanded(
             flex: 2,
             child: Text(user.role,
-                style: const TextStyle(fontSize: 13, color: Colors.black87)),
+                style: const TextStyle(fontSize: 13, color: Colors.black87),
+                overflow: TextOverflow.ellipsis),
           ),
           SizedBox(
             width: 72,
@@ -552,12 +532,14 @@ class _AdminScreenState extends State<AdminScreen> {
           Expanded(
             flex: 3,
             child: Text(emp.name,
-                style: const TextStyle(fontSize: 13, color: Colors.black87)),
+                style: const TextStyle(fontSize: 13, color: Colors.black87),
+                overflow: TextOverflow.ellipsis),
           ),
           Expanded(
             flex: 2,
             child: Text(emp.role,
-                style: const TextStyle(fontSize: 13, color: Colors.black87)),
+                style: const TextStyle(fontSize: 13, color: Colors.black87),
+                overflow: TextOverflow.ellipsis),
           ),
           SizedBox(
             width: 72,

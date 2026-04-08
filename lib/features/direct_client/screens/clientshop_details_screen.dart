@@ -305,20 +305,6 @@ class _ClientShopDetailsScreenState
                     padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
                     child: Row(
                       children: [
-                        OutlinedButton.icon(
-                          onPressed: () {},
-                          icon: const Icon(Icons.filter_list, size: 16),
-                          label: const Text('Filter'),
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: Colors.black87,
-                            side: BorderSide(color: Colors.grey[300]!),
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 14, vertical: 10),
-                            shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(8)),
-                          ),
-                        ),
-                        const SizedBox(width: 10),
                         Expanded(
                           child: TextField(
                             controller: _searchController,
@@ -470,7 +456,8 @@ class _ClientShopDetailsScreenState
                                   padding: const EdgeInsets.symmetric(
                                       vertical: 16, horizontal: 12),
                                   child: Text(shop.shopname,
-                                      style: const TextStyle(fontSize: 14)),
+                                      style: const TextStyle(fontSize: 14),
+                                      overflow: TextOverflow.ellipsis),
                                 ),
                               ),
                               Expanded(
@@ -481,7 +468,8 @@ class _ClientShopDetailsScreenState
                                       shop.scontactperson.isEmpty
                                           ? '-'
                                           : shop.scontactperson,
-                                      style: const TextStyle(fontSize: 14)),
+                                      style: const TextStyle(fontSize: 14),
+                                      overflow: TextOverflow.ellipsis),
                                 ),
                               ),
                               SizedBox(

@@ -231,7 +231,7 @@ class _ServicesDonutChartState extends State<ServicesDonutChart> {
     final total = entries.fold<int>(0, (s, e) => s + e.value);
 
     return _ChartCard(
-      title: 'Services Breakdown',
+      title: 'Services',
       child: LayoutBuilder(builder: (ctx, box) {
         final diameter = (box.maxWidth * 0.65).clamp(160.0, 210.0);
 

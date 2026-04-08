@@ -252,21 +252,6 @@ class _DirectClientScreenState extends ConsumerState<DirectClientScreen> {
                       const SizedBox(height: 16),
                       Row(
                         children: [
-                          OutlinedButton.icon(
-                            onPressed: () =>
-                                ref.read(clientListProvider.notifier).refresh(),
-                            icon: const Icon(Icons.refresh, size: 18),
-                            label: const Text('Refresh'),
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: Colors.black87,
-                              side: BorderSide(color: Colors.grey[300]!),
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 14, vertical: 10),
-                              shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(8)),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
                           Expanded(
                             child: TextField(
                               controller: _searchController,
@@ -416,6 +401,7 @@ class _DirectClientScreenState extends ConsumerState<DirectClientScreen> {
                                     child: Text(
                                       map['shop'] ?? '-',
                                       style: const TextStyle(fontSize: 14),
+                                      overflow: TextOverflow.ellipsis,
                                     ),
                                   ),
                                 ),
@@ -426,6 +412,7 @@ class _DirectClientScreenState extends ConsumerState<DirectClientScreen> {
                                     child: Text(
                                       _clientDisplayName(client),
                                       style: const TextStyle(fontSize: 14),
+                                      overflow: TextOverflow.ellipsis,
                                     ),
                                   ),
                                 ),
@@ -483,13 +470,17 @@ class _DirectClientScreenState extends ConsumerState<DirectClientScreen> {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Text(
-                            'Showing $start to $end of $_totalClients entries',
-                            style: const TextStyle(
-                              fontSize: 12,
-                              color: Colors.grey,
+                          Flexible(
+                            child: Text(
+                              'Showing $start to $end of $_totalClients entries',
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: Colors.grey,
+                              ),
+                              overflow: TextOverflow.ellipsis,
                             ),
                           ),
+                          const SizedBox(width: 8),
                           Row(
                             children: [
                               _PaginationButton(

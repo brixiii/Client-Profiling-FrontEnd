@@ -387,20 +387,6 @@ class _ResellerDetailScreenState extends State<ResellerDetailScreen> {
                             ),
                           ),
                         ),
-                        const SizedBox(width: 10),
-                        OutlinedButton.icon(
-                          onPressed: () {},
-                          icon: const Icon(Icons.filter_list_rounded, size: 17),
-                          label: const Text('Filter'),
-                          style: OutlinedButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 14, vertical: 11),
-                            side: BorderSide(color: Colors.grey[300]!),
-                            foregroundColor: Colors.black87,
-                            shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(10)),
-                          ),
-                        ),
                       ],
                     ),
                   ),
@@ -507,6 +493,7 @@ class _ResellerDetailScreenState extends State<ResellerDetailScreen> {
                                 product.modelName,
                                 style: const TextStyle(
                                     fontSize: 13, color: Colors.black87),
+                                overflow: TextOverflow.ellipsis,
                               ),
                             ),
                             Expanded(
@@ -515,6 +502,7 @@ class _ResellerDetailScreenState extends State<ResellerDetailScreen> {
                                 textAlign: TextAlign.center,
                                 style: TextStyle(
                                     fontSize: 13, color: Colors.grey[700]),
+                                overflow: TextOverflow.ellipsis,
                               ),
                             ),
                             SizedBox(

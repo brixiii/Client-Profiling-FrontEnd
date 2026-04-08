@@ -92,7 +92,12 @@ class ClientListNotifier extends StateNotifier<ClientListState> {
   // ── Public API ─────────────────────────────────────────────────────────
 
   /// Fetch (or re-fetch) the client list.  Call after create/update/delete.
-  Future<void> fetch({int? page, String? query}) async {
+  ///
+  /// [refreshCounts] — when true (default) also re-fetches the global product
+  /// and service totals shown in the analytics cards.  Pass false for page
+  /// navigation and search queries so those two extra requests are skipped;
+  /// the counts already in state are preserved instead.
+  Future<void> fetch({int? page, String? query, bool refreshCounts = true}) async {
     final id = ++_seq;
     final pg = page ?? state.page;
     final q = query ?? state.query;
@@ -100,8 +105,8 @@ class ClientListNotifier extends StateNotifier<ClientListState> {
     state = state.copyWith(isLoading: true, error: null, page: pg, query: q);
 
     try {
-      // Clients + product count + service count fetched in parallel.
-      final results = await Future.wait([
+      // Always fetch the client page.  Conditionally add count-only requests.
+      final futures = <Future<dynamic>>[
         _api
             .getClients(page: pg, perPage: perPage, q: q.isEmpty ? null : q)
             .catchError(
@@ -114,33 +119,43 @@ class ClientListNotifier extends StateNotifier<ClientListState> {
                 links: const [],
               ),
             ),
-        _api.getProducts(page: 1, perPage: 1).catchError(
-              (_) => PaginatedResponse<Product>(
-                data: const [],
-                currentPage: 1,
-                perPage: 1,
-                total: state.soldProductsCount,
-                lastPage: 1,
-                links: const [],
+      ];
+      if (refreshCounts) {
+        futures.add(
+          _api.getProducts(page: 1, perPage: 1).catchError(
+                (_) => PaginatedResponse<Product>(
+                  data: const [],
+                  currentPage: 1,
+                  perPage: 1,
+                  total: state.soldProductsCount,
+                  lastPage: 1,
+                  links: const [],
+                ),
               ),
-            ),
-        _api.getAvailedServices(page: 1, perPage: 1).catchError(
-              (_) => PaginatedResponse<AvailedService>(
-                data: const [],
-                currentPage: 1,
-                perPage: 1,
-                total: state.servicesCount,
-                lastPage: 1,
-                links: const [],
+        );
+        futures.add(
+          _api.getAvailedServices(page: 1, perPage: 1).catchError(
+                (_) => PaginatedResponse<AvailedService>(
+                  data: const [],
+                  currentPage: 1,
+                  perPage: 1,
+                  total: state.servicesCount,
+                  lastPage: 1,
+                  links: const [],
+                ),
               ),
-            ),
-      ]);
+        );
+      }
+
+      final results = await Future.wait(futures);
 
       if (id != _seq) return; // stale response — discard
 
       final clientsPage = results[0] as PaginatedResponse<Map<String, dynamic>>;
-      final productsPage = results[1] as PaginatedResponse<Product>;
-      final servicesPage = results[2] as PaginatedResponse<AvailedService>;
+      final productsPage =
+          refreshCounts ? results[1] as PaginatedResponse<Product> : null;
+      final servicesPage =
+          refreshCounts ? results[2] as PaginatedResponse<AvailedService> : null;
 
       // Safe pagination fallback: backend sometimes returns total=0 despite
       // having data.  Infer the values from the fetched count instead.
@@ -160,8 +175,8 @@ class ClientListNotifier extends StateNotifier<ClientListState> {
         lastPage: safeLastPage,
         isLoading: false,
         ownersCount: safeTotal,
-        soldProductsCount: productsPage.total,
-        servicesCount: servicesPage.total,
+        soldProductsCount: productsPage?.total ?? state.soldProductsCount,
+        servicesCount: servicesPage?.total ?? state.servicesCount,
       );
 
       // Shops — best-effort; do not block the client list above.
@@ -192,10 +207,13 @@ class ClientListNotifier extends StateNotifier<ClientListState> {
   Future<void> refresh() => fetch(page: state.page, query: state.query);
 
   /// Navigate to [page] without changing the search query.
-  void setPage(int page) => fetch(page: page);
+  /// Counts are not re-fetched because they are unaffected by pagination.
+  void setPage(int page) => fetch(page: page, refreshCounts: false);
 
   /// Change the search query and reset to page 1.
-  void setQuery(String query) => fetch(page: 1, query: query);
+  /// Counts are not re-fetched because they reflect global totals, not
+  /// the filtered result set.
+  void setQuery(String query) => fetch(page: 1, query: query, refreshCounts: false);
 }
 
 // ── Provider ───────────────────────────────────────────────────────────────

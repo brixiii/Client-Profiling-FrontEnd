@@ -31,7 +31,7 @@ class _AdminDetailScreenState extends State<AdminDetailScreen> {
           ),
         ],
       ),
-      body: Padding(
+      body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -54,12 +54,11 @@ class _AdminDetailScreenState extends State<AdminDetailScreen> {
             _buildField('Role', user.role),
             _buildField('Address', user.address),
 
-            const Spacer(),
+            const SizedBox(height: 32),
 
             // Update button (yellow)
             SizedBox(
               width: double.infinity,
-              height: 50,
               child: ElevatedButton(
                 onPressed: () async {
                   final result = await Navigator.push(
@@ -90,7 +89,6 @@ class _AdminDetailScreenState extends State<AdminDetailScreen> {
             // Delete button (red)
             SizedBox(
               width: double.infinity,
-              height: 50,
               child: ElevatedButton(
                 onPressed: _isDeleting ? null : () => _confirmDelete(context),
                 style: ElevatedButton.styleFrom(

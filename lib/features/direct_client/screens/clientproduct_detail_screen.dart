@@ -1230,14 +1230,16 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> {
             child: Padding(
               padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
               child: Text(product.modelName,
-                  style: const TextStyle(fontSize: 12, color: Colors.black87)),
+                  style: const TextStyle(fontSize: 12, color: Colors.black87),
+                  overflow: TextOverflow.ellipsis),
             ),
           ),
           Expanded(
             child: Padding(
               padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
               child: Text(product.modelCode.isEmpty ? '-' : product.modelCode,
-                  style: const TextStyle(fontSize: 12, color: Colors.black87)),
+                  style: const TextStyle(fontSize: 12, color: Colors.black87),
+                  overflow: TextOverflow.ellipsis),
             ),
           ),
           Expanded(
@@ -1246,6 +1248,7 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> {
               child: Text(
                 product.applianceType.isEmpty ? '-' : product.applianceType,
                 style: const TextStyle(fontSize: 12, color: Colors.black87),
+                overflow: TextOverflow.ellipsis,
               ),
             ),
           ),
@@ -1352,14 +1355,16 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> {
             child: Padding(
               padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
               child: Text(s.controlNumber.isEmpty ? '-' : s.controlNumber,
-                  style: const TextStyle(fontSize: 12, color: Colors.black87)),
+                  style: const TextStyle(fontSize: 12, color: Colors.black87),
+                  overflow: TextOverflow.ellipsis),
             ),
           ),
           Expanded(
             child: Padding(
               padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
               child: Text(resolvedServiceType,
-                  style: const TextStyle(fontSize: 12, color: Colors.black87)),
+                  style: const TextStyle(fontSize: 12, color: Colors.black87),
+                  overflow: TextOverflow.ellipsis),
             ),
           ),
           SizedBox(

@@ -154,7 +154,6 @@ class _ServiceTypeScreenState extends State<ServiceTypeScreen> {
 
             // ── Search field ─────────────────────────────────────────
             SizedBox(
-              width: 160,
               height: 36,
               child: TextField(
                 controller: _searchController,

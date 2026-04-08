@@ -140,7 +140,7 @@ class _SparePartsScreenState extends State<SparePartsScreen> {
 
             // ── Search field ──────────────────────────────────────────
             SizedBox(
-              width: 160,
+
               height: 36,
               child: TextField(
                 controller: _searchController,
@@ -313,6 +313,7 @@ class _SparePartsScreenState extends State<SparePartsScreen> {
                                         fontSize: 13,
                                         color: Colors.black87,
                                       ),
+                                      overflow: TextOverflow.ellipsis,
                                     ),
                                   ),
                                 ),
