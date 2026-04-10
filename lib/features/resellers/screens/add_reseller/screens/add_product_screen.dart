@@ -460,8 +460,11 @@ class _AddProductScreenState extends State<AddProductScreen> {
                   backgroundColor: Color(0xFFFFF9C4),
                 ),
               ),
-            _buildDropdown('Select Model Name', _modelName, _modelNames,
-                _onModelNameChanged,
+            _buildSearchableDropdownField(
+                hint: 'Select Model Name',
+                value: _modelName,
+                items: _modelNames,
+                onChanged: _onModelNameChanged,
                 errorText: _fieldErrors['model_name']),
             const SizedBox(height: 12),
             Row(
@@ -487,11 +490,17 @@ class _AddProductScreenState extends State<AddProductScreen> {
               ],
             ),
             const SizedBox(height: 8),
-            _buildDropdown('Select supplier type', _supplierType,
-                _supplierTypes, (v) => setState(() => _supplierType = v)),
+            _buildSearchableDropdownField(
+                hint: 'Select supplier type',
+                value: _supplierType,
+                items: _supplierTypes,
+                onChanged: (v) => setState(() => _supplierType = v)),
             const SizedBox(height: 12),
-            _buildDropdown('Machine Type', _machineType, _machineTypes,
-                _onMachineTypeChanged,
+            _buildSearchableDropdownField(
+                hint: 'Machine Type',
+                value: _machineType,
+                items: _machineTypes,
+                onChanged: _onMachineTypeChanged,
                 errorText: _fieldErrors['appliance_type']),
             const SizedBox(height: 12),
             _buildTextField(_modelCodeController,
@@ -499,8 +508,11 @@ class _AddProductScreenState extends State<AddProductScreen> {
                 readOnly: true,
                 errorText: _fieldErrors['model_code']),
             const SizedBox(height: 12),
-            _buildDropdown('UOM', _unit, _uomOptions,
-                (v) => setState(() => _unit = v),
+            _buildSearchableDropdownField(
+                hint: 'UOM',
+                value: _unit,
+                items: _uomOptions,
+                onChanged: (v) => setState(() => _unit = v),
                 errorText: _fieldErrors['unitsofmeasurement']),
           ],
         );
@@ -565,8 +577,11 @@ class _AddProductScreenState extends State<AddProductScreen> {
             _buildDateField('Delivery Date', _deliveryDate,
                 (d) => setState(() => _deliveryDate = d)),
             const SizedBox(height: 12),
-            _buildDropdown('Logistic', _logistic, _logistics,
-                (v) => setState(() => _logistic = v)),
+            _buildSearchableDropdownField(
+                hint: 'Logistic',
+                value: _logistic,
+                items: _logistics,
+                onChanged: (v) => setState(() => _logistic = v)),
             const SizedBox(height: 12),
             _buildTextField(_customerRepController,
                 hint: 'Customer Representative'),
@@ -694,6 +709,85 @@ class _AddProductScreenState extends State<AddProductScreen> {
             ),
           ),
       ],
+    );
+  }
+
+  Widget _buildSearchableDropdownField({
+    required String hint,
+    required String? value,
+    required List<String> items,
+    required ValueChanged<String?> onChanged,
+    String? errorText,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        InkWell(
+          onTap: () => _showSearchPicker(
+            hint: hint,
+            items: items,
+            selected: value,
+            onSelected: onChanged,
+          ),
+          child: Container(
+            padding:
+                const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                color: errorText != null
+                    ? const Color(0xFFB91C1C)
+                    : Colors.grey[300]!,
+              ),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    value ?? hint,
+                    style: TextStyle(
+                      fontSize: 14,
+                      color:
+                          value != null ? Colors.black87 : Colors.grey[400],
+                    ),
+                  ),
+                ),
+                Icon(Icons.arrow_drop_down, color: Colors.grey[500]),
+              ],
+            ),
+          ),
+        ),
+        if (errorText != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Text(
+              errorText,
+              style: const TextStyle(
+                  fontSize: 12, color: Color(0xFFB91C1C)),
+            ),
+          ),
+      ],
+    );
+  }
+
+  void _showSearchPicker({
+    required String hint,
+    required List<String> items,
+    required String? selected,
+    required ValueChanged<String?> onSelected,
+  }) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => _FullScreenSearchPicker(
+          hint: hint,
+          items: items,
+          selected: selected,
+          onSelected: (item) {
+            onSelected(item);
+          },
+        ),
+      ),
     );
   }
 
@@ -1011,43 +1105,29 @@ class _AddProductScreenState extends State<AddProductScreen> {
             ),
 
             // ── Bottom button ────────────────────────────────────────
-            if (_currentStep == _totalSteps - 1)
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: _nextStep,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFFFC300),
-                    foregroundColor: Colors.black,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8)),
-                    elevation: 0,
-                  ),
-                  child: const Text('Submit',
-                      style: TextStyle(
-                          fontSize: 16, fontWeight: FontWeight.w700)),
+            SizedBox(
+              width: double.infinity,
+              height: 52,
+              child: ElevatedButton(
+                onPressed: _nextStep,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: _currentStep == _totalSteps - 1
+                      ? const Color(0xFFFFC300)
+                      : const Color(0xFF2563EB),
+                  foregroundColor: _currentStep == _totalSteps - 1
+                      ? Colors.black87
+                      : Colors.white,
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
                 ),
-              )
-            else
-              Align(
-                alignment: Alignment.centerRight,
-                child: ElevatedButton(
-                  onPressed: _nextStep,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF2196F3),
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 40, vertical: 14),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8)),
-                    elevation: 0,
-                  ),
-                  child: const Text('Next',
-                      style: TextStyle(
-                          fontSize: 15, fontWeight: FontWeight.w600)),
+                child: Text(
+                  _currentStep == _totalSteps - 1 ? 'Submit' : 'Next',
+                  style: const TextStyle(
+                      fontSize: 15, fontWeight: FontWeight.w600),
                 ),
               ),
+            ),
           ],
         ),
       ),
@@ -1060,4 +1140,106 @@ class _ApplianceTypeMeta {
   final String codeField;
 
   const _ApplianceTypeMeta(this.label, this.codeField);
+}
+
+// ── Full-screen search picker ─────────────────────────────────────────────
+class _FullScreenSearchPicker extends StatefulWidget {
+  final String hint;
+  final List<String> items;
+  final String? selected;
+  final ValueChanged<String?> onSelected;
+
+  const _FullScreenSearchPicker({
+    required this.hint,
+    required this.items,
+    required this.selected,
+    required this.onSelected,
+  });
+
+  @override
+  State<_FullScreenSearchPicker> createState() =>
+      _FullScreenSearchPickerState();
+}
+
+class _FullScreenSearchPickerState extends State<_FullScreenSearchPicker> {
+  String _query = '';
+  late final TextEditingController _searchController;
+
+  @override
+  void initState() {
+    super.initState();
+    _searchController = TextEditingController();
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final filtered = widget.items
+        .where((s) => s.toLowerCase().contains(_query.toLowerCase()))
+        .toList();
+
+    return Scaffold(
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        elevation: 0.5,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: Colors.black87),
+          onPressed: () => Navigator.pop(context),
+        ),
+        title: Text(
+          widget.hint,
+          style: const TextStyle(
+            color: Colors.black87,
+            fontSize: 18,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ),
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(12),
+            child: TextField(
+              controller: _searchController,
+              autofocus: true,
+              decoration: InputDecoration(
+                hintText: 'Search ${widget.hint}...',
+                prefixIcon: const Icon(Icons.search),
+                border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8)),
+                contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 12, vertical: 10),
+                isDense: true,
+              ),
+              onChanged: (v) => setState(() => _query = v),
+            ),
+          ),
+          const Divider(height: 1),
+          Expanded(
+            child: ListView.builder(
+              itemCount: filtered.length,
+              itemBuilder: (_, i) {
+                final item = filtered[i];
+                return ListTile(
+                  title: Text(item, style: const TextStyle(fontSize: 14)),
+                  trailing: item == widget.selected
+                      ? const Icon(Icons.check, color: Color(0xFFFFC300))
+                      : null,
+                  onTap: () {
+                    Navigator.pop(context);
+                    widget.onSelected(item);
+                  },
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }

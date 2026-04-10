@@ -342,10 +342,10 @@ class _ProductDetailsEntitiesScreenState
     final quantity = _value('quantity', '-');
     final poNumber = _value('poNumber', '-');
     final drNumber = _value('drNumber', '-');
-    final contractDate = _product?.contractDate ?? _value('contractDate', '');
-    final deliveryDate = _product?.deliveryDate ?? _value('deliveryDate', '');
+    final contractDate = (_product?.contractDate ?? _value('contractDate', '')).split('T').first;
+    final deliveryDate = (_product?.deliveryDate ?? _value('deliveryDate', '')).split('T').first;
     final installationDate =
-        _product?.installmentDate ?? _value('installationDate', '');
+        (_product?.installmentDate ?? _value('installationDate', '')).split('T').first;
     final employeeName =
         _product?.employeeId.toString() ?? _value('employeeName', '-');
 

@@ -46,7 +46,7 @@ class ServicesEntitiesScreen extends StatelessWidget {
                   _labelValue('Service Type', service['serviceType'] ?? '-'),
                   const SizedBox(height: 14),
 
-                  _labelValue('Service Date', service['serviceDate'] ?? '-'),
+                  _labelValue('Service Date', (service['serviceDate'] ?? '-').split('T').first),
                   const SizedBox(height: 14),
 
                   _labelValue(

@@ -171,7 +171,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                             p.drNumber.isEmpty ? 'N/A' : p.drNumber),
                         const SizedBox(height: 14),
                         _buildInfoRow(Icons.calendar_today_outlined, 'Delivery Date',
-                            p.deliveryDate.isEmpty ? 'N/A' : p.deliveryDate),
+                            p.deliveryDate.isEmpty ? 'N/A' : p.deliveryDate.split('T').first),
                         const SizedBox(height: 14),
                         _buildInfoRow(Icons.location_on_outlined, 'Delivery Address',
                             p.deliveryAddress.isEmpty ? 'N/A' : p.deliveryAddress),

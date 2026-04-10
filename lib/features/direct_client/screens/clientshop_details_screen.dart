@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../shared/api/api_exception.dart';
+import '../../../shared/api/backend_api.dart';
 import '../../../shared/session_flags.dart';
 import '../../../shared/models/shop.dart';
 import '../../../shared/widgets/custom_app_bar.dart';
@@ -24,9 +25,53 @@ class ClientShopDetailsScreen extends ConsumerStatefulWidget {
 class _ClientShopDetailsScreenState
     extends ConsumerState<ClientShopDetailsScreen> {
   final TextEditingController _searchController = TextEditingController();
+  final BackendApi _api = BackendApi();
+
+  late Map<String, String> _clientData;
 
   int? get _clientId =>
-      int.tryParse(widget.client['client_id'] ?? widget.client['id'] ?? '');
+      int.tryParse(_clientData['client_id'] ?? _clientData['id'] ?? '');
+
+  @override
+  void initState() {
+    super.initState();
+    _clientData = Map<String, String>.from(widget.client);
+  }
+
+  Future<void> _refreshClientData() async {
+    final id = _clientId;
+    if (id == null) return;
+    try {
+      final fresh = await _api.getClientById(id);
+      final firstName = (fresh['cfirstname'] ?? '') as String;
+      final middleName = (fresh['cmiddlename'] ?? '') as String;
+      final lastName = (fresh['csurname'] ?? '') as String;
+      final fullName = [firstName, middleName, lastName]
+          .where((s) => s.isNotEmpty)
+          .join(' ');
+      final email = (fresh['cemail'] ?? '') as String;
+      final phone = (fresh['cphonenum'] ?? '') as String;
+      if (!mounted) return;
+      setState(() {
+        _clientData = {
+          ..._clientData,
+          'cfirstname': firstName,
+          'cmiddlename': middleName,
+          'csurname': lastName,
+          'ccompanyname': (fresh['ccompanyname'] ?? '') as String,
+          'notes': (fresh['notes'] ?? '') as String,
+          'name': fullName,
+          if (_clientData['contactPerson'] == _clientData['name'] ||
+              _clientData['contactPerson'] == widget.client['contactPerson'])
+            'contactPerson': fullName,
+          if (email.isNotEmpty) 'contactEmail': email,
+          if (phone.isNotEmpty) 'contactNo': phone,
+        };
+      });
+    } catch (_) {
+      // silently ignore — stale data is acceptable
+    }
+  }
 
   @override
   void dispose() {
@@ -36,7 +81,7 @@ class _ClientShopDetailsScreenState
 
   @override
   Widget build(BuildContext context) {
-    final client = widget.client;
+    final client = _clientData;
     final shopsAsync = ref.watch(clientShopsProvider(_clientId));
     final _isShopsLoading = shopsAsync.isLoading;
     final _shopsError = shopsAsync.hasError
@@ -186,14 +231,18 @@ class _ClientShopDetailsScreenState
                           children: [
                             Expanded(
                               child: ElevatedButton.icon(
-                                onPressed: () {
-                                  Navigator.push(
+                                onPressed: () async {
+                                  final result =
+                                      await Navigator.push<bool>(
                                     context,
                                     MaterialPageRoute(
-                                      builder: (_) =>
-                                          EditOwnerScreen(client: client),
+                                      builder: (_) => EditOwnerScreen(
+                                          client: _clientData),
                                     ),
                                   );
+                                  if (result == true) {
+                                    await _refreshClientData();
+                                  }
                                 },
                                 icon: const Icon(Icons.edit_outlined, size: 18),
                                 label: const Text('Edit'),
@@ -255,7 +304,27 @@ class _ClientShopDetailsScreenState
                                               ),
                                             );
                                             if (confirmed == true) {
-                                              Navigator.pop(context);
+                                              final id = _clientId;
+                                              if (id == null) return;
+                                              try {
+                                                await _api.deleteClient(id);
+                                                if (!mounted) return;
+                                                ScaffoldMessenger.of(context)
+                                                    .showSnackBar(
+                                                  const SnackBar(
+                                                      content: Text(
+                                                          'Client deleted successfully.')),
+                                                );
+                                                Navigator.pop(context, true);
+                                              } catch (e) {
+                                                if (!mounted) return;
+                                                ScaffoldMessenger.of(context)
+                                                    .showSnackBar(
+                                                  SnackBar(
+                                                      content: Text(
+                                                          'Failed to delete client: $e')),
+                                                );
+                                              }
                                             }
                                           },
                                 icon:

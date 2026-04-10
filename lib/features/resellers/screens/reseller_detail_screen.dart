@@ -22,6 +22,7 @@ class _ResellerDetailScreenState extends State<ResellerDetailScreen> {
   int _entriesPerPage = 5;
   int _currentPage = 1;
   String _searchQuery = '';
+  bool _didChange = false;
 
   final BackendApi _api = BackendApi();
   late Reseller _reseller;
@@ -78,7 +79,12 @@ class _ResellerDetailScreenState extends State<ResellerDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return WillPopScope(
+      onWillPop: () async {
+        Navigator.of(context).pop(_didChange);
+        return false;
+      },
+      child: Scaffold(
       backgroundColor: Colors.white,
       appBar: CustomAppBar(
         title: 'Reseller Detail',
@@ -221,7 +227,10 @@ class _ResellerDetailScreenState extends State<ResellerDetailScreen> {
                                       ),
                                     ),
                                   );
-                                  if (result == true && mounted) _loadDetail();
+                                  if (result == true && mounted) {
+                                    _didChange = true;
+                                    _loadDetail();
+                                  }
                                 },
                                 icon: const Icon(Icons.edit_outlined, size: 18),
                                 label: const Text('Edit'),
@@ -325,7 +334,10 @@ class _ResellerDetailScreenState extends State<ResellerDetailScreen> {
                                 ),
                               ),
                             );
-                            if (result == true && mounted) _loadDetail();
+                            if (result == true && mounted) {
+                              _didChange = true;
+                              _loadDetail();
+                            }
                           },
                           icon: const Icon(Icons.add_rounded, size: 16),
                           label: const Text('Add Product'),
@@ -518,7 +530,10 @@ class _ResellerDetailScreenState extends State<ResellerDetailScreen> {
                                       ),
                                     ),
                                   );
-                                  if (result == true && mounted) _loadDetail();
+                                  if (result == true && mounted) {
+                                    _didChange = true;
+                                    _loadDetail();
+                                  }
                                 },
                                 style: OutlinedButton.styleFrom(
                                   padding: const EdgeInsets.symmetric(
@@ -623,6 +638,7 @@ class _ResellerDetailScreenState extends State<ResellerDetailScreen> {
           ],
         ),
       ),
+    ),
     );
   }
 

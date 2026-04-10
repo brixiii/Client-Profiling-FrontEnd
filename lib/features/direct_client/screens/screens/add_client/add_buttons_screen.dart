@@ -5,12 +5,11 @@ import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import '../../../../../shared/widgets/custom_app_bar.dart';
 import '../../../../../shared/api/backend_api.dart';
-import '../../../../../shared/data/philippine_address_data.dart';
+import '../../../../../shared/data/philippine_address_data.dart' show PhilippineFullAddressData;
 import '../../../../../shared/api/api_exception.dart';
 import '../../../../../shared/api/paginated_response.dart';
 import 'map_picker_screen.dart';
 import 'package:latlong2/latlong.dart';
-import '../../../../../shared/models/availed_service.dart';
 import '../../../../../shared/models/employee.dart';
 import '../../../../../shared/models/product.dart';
 import '../../../../../shared/models/shop.dart';
@@ -88,6 +87,7 @@ class _AddButtonsScreenState extends State<AddButtonsScreen> {
   // ── Shop controllers ───────────────────────────────────────────────────
   final _shopNameController = TextEditingController();
   String? _shopRegion;
+  String? _shopProvince;
   String? _shopCity;
   String? _shopBarangay;
   final _shopStreetController = TextEditingController();
@@ -179,46 +179,64 @@ class _AddButtonsScreenState extends State<AddButtonsScreen> {
     });
 
     try {
-      // Start every future BEFORE awaiting any — runs all requests in parallel.
-      // Typed variables avoid the Future.wait List<Object> cast crash.
+      // Only start futures needed for the active mode — avoids fetching
+      // serial numbers / spare parts / products when adding a client or shop.
       final empty_m = PaginatedResponse<Map<String, dynamic>>(
           data: const [], currentPage: 1, perPage: 100, total: 0, lastPage: 1, links: const []);
+      final emptyEmployees = PaginatedResponse<Employee>(
+          data: const [], currentPage: 1, perPage: 100, total: 0, lastPage: 1, links: const []);
+      final emptyShops = PaginatedResponse<Shop>(
+          data: const [], currentPage: 1, perPage: 100, total: 0, lastPage: 1, links: const []);
+      final emptyProducts = PaginatedResponse<Product>(
+          data: const [], currentPage: 1, perPage: 200, total: 0, lastPage: 1, links: const []);
+      final emptyServiceTypes = PaginatedResponse<ServiceTypeModel>(
+          data: const [], currentPage: 1, perPage: 100, total: 0, lastPage: 1, links: const []);
+      final emptySerials = PaginatedResponse<SerialNumberModel>(
+          data: const [], currentPage: 1, perPage: 100, total: 0, lastPage: 1, links: const []);
 
+      final mode = widget.mode;
+      final needsEmployees       = mode == AddMode.product || mode == AddMode.service;
+      final needsShops           = mode == AddMode.product || mode == AddMode.shop;
+      final needsProducts        = mode == AddMode.product;
+      final needsApplianceModels = mode == AddMode.product;
+      final needsServiceTypes    = mode == AddMode.service;
+      final needsSpareParts      = mode == AddMode.service;
+      final needsSerialNumbers   = mode == AddMode.service;
+
+      // Start only futures relevant to the current mode.
       final clientsFut = _api.getClients(page: 1, perPage: 100)
           .catchError((_) => empty_m);
-      final employeesFut = _api.getEmployees(page: 1, perPage: 100)
-          .catchError((_) => PaginatedResponse<Employee>(
-              data: const [], currentPage: 1, perPage: 100, total: 0, lastPage: 1, links: const []));
-      final shopsFut = _api.getShops(page: 1, perPage: 100)
-          .catchError((_) => PaginatedResponse<Shop>(
-              data: const [], currentPage: 1, perPage: 100, total: 0, lastPage: 1, links: const []));
-      final productsFut = _api.getProducts(page: 1, perPage: 200)
-          .catchError((_) => PaginatedResponse<Product>(
-              data: const [], currentPage: 1, perPage: 200, total: 0, lastPage: 1, links: const []));
-      final applianceModelsFut = _api.getApplianceModels(page: 1, perPage: 100)
-          .catchError((_) => empty_m);
-      final availedServicesFut = _api.getAvailedServices(page: 1, perPage: 200)
-          .catchError((_) => PaginatedResponse<AvailedService>(
-              data: const [], currentPage: 1, perPage: 200, total: 0, lastPage: 1, links: const []));
-      final serviceTypesFut = _api.getServiceTypes(page: 1, perPage: 100)
-          .catchError((_) => PaginatedResponse<ServiceTypeModel>(
-              data: const [], currentPage: 1, perPage: 100, total: 0, lastPage: 1, links: const []));
-      final sparePartsFut = _api.fetchAllSpareParts()
-          .catchError((_) => <SparePartModel>[]);
-      final serialNumbersFut = _api
-          .getSerialNumbers(
-              page: 1,
-              perPage: 500)
-          .catchError((_) => PaginatedResponse<SerialNumberModel>(
-              data: const [], currentPage: 1, perPage: 500, total: 0, lastPage: 1, links: const []));
+      final employeesFut = needsEmployees
+          ? _api.getEmployees(page: 1, perPage: 100)
+              .catchError((_) => emptyEmployees)
+          : Future.value(emptyEmployees);
+      final shopsFut = needsShops
+          ? _api.getShops(page: 1, perPage: 100)
+              .catchError((_) => emptyShops)
+          : Future.value(emptyShops);
+      final productsFut = needsProducts
+          ? _api.getProducts(page: 1, perPage: 200)
+              .catchError((_) => emptyProducts)
+          : Future.value(emptyProducts);
+      final applianceModelsFut = needsApplianceModels
+          ? _api.getApplianceModels(page: 1, perPage: 100)
+              .catchError((_) => empty_m)
+          : Future.value(empty_m);
+      final serviceTypesFut = needsServiceTypes
+          ? _api.getServiceTypes(page: 1, perPage: 100)
+              .catchError((_) => emptyServiceTypes)
+          : Future.value(emptyServiceTypes);
+      final sparePartsFut = needsSpareParts
+          ? _api.fetchAllSpareParts().catchError((_) => <SparePartModel>[])
+          : Future.value(<SparePartModel>[]);
+      final serialNumbersFut = Future.value(emptySerials);
 
-      // Now await — all 9 calls are already in-flight at this point.
+      // Await all — in-flight futures run in parallel, skipped ones resolve instantly.
       final clientsResp = await clientsFut;
       final employeesResp = await employeesFut;
       final shopsResp = await shopsFut;
       final productsResp = await productsFut;
       final applianceModelsResp = await applianceModelsFut;
-      final availedServicesResp = await availedServicesFut;
       final serviceTypesResp = await serviceTypesFut;
       final sparePartsResp = await sparePartsFut;
       final serialNumbersResp = await serialNumbersFut;
@@ -230,7 +248,6 @@ class _AddButtonsScreenState extends State<AddButtonsScreen> {
       final shops = shopsResp.data;
       final products = productsResp.data;
       final applianceModels = applianceModelsResp.data;
-      final availedServices = availedServicesResp.data;
       final serviceTypes = serviceTypesResp.data;
       final validServiceTypeRows = serviceTypes
           .map((s) => <String, dynamic>{'id': s.id.toString(), 'setypename': s.setypename})
@@ -295,9 +312,6 @@ class _AddButtonsScreenState extends State<AddButtonsScreen> {
       final derivedUom = _sanitizeUomOptions(
         products.map((Product p) => p.unitsofmeasurement),
       );
-      final derivedSerialNumbers = collectUnique(
-        availedServices.map((AvailedService s) => s.serialNumberId),
-      );
       final derivedServiceTypes = validServiceTypeRows
           .map((row) => row['setypename']?.toString().trim() ?? '')
           .where((name) => name.isNotEmpty)
@@ -326,9 +340,6 @@ class _AddButtonsScreenState extends State<AddButtonsScreen> {
         _uomOptions
           ..clear()
           ..addAll(derivedUom);
-        _serialNumbers
-          ..clear()
-          ..addAll(derivedSerialNumbers);
 
         _shopTypeIds
           ..clear()
@@ -425,6 +436,22 @@ class _AddButtonsScreenState extends State<AddButtonsScreen> {
 
         _isLoadingDependencies = false;
       });
+
+      // Fetch serial numbers AFTER _selectedClientId has been resolved.
+      if (needsSerialNumbers && _selectedClientId != null) {
+        try {
+          final serialResp = await _api.getSerialNumbers(
+            page: 1,
+            perPage: 100,
+            clientId: _selectedClientId,
+          );
+          if (mounted) {
+            setState(() => _serialNumberModels = serialResp.data);
+          }
+        } catch (_) {
+          // Leave _serialNumberModels as-is (empty) on error.
+        }
+      }
     } catch (_) {
       // Unexpected error outside per-call isolation (e.g. setState after dispose).
       if (!mounted) return;
@@ -498,16 +525,26 @@ class _AddButtonsScreenState extends State<AddButtonsScreen> {
       if (!mounted) return;
       setState(() {
         _isGeocoding = false;
-        _globalError = e.message.isNotEmpty
-            ? e.message
-            : 'Unable to geocode the provided address.';
+        currentStep = 1;
       });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+              'Could not auto-locate address. Please pick on map.'),
+        ),
+      );
     } catch (e) {
       if (!mounted) return;
       setState(() {
         _isGeocoding = false;
-        _globalError = _friendlyErrorMessage(e);
+        currentStep = 1;
       });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+              'Could not auto-locate address. Please pick on map.'),
+        ),
+      );
     }
   }
 
@@ -637,7 +674,18 @@ class _AddButtonsScreenState extends State<AddButtonsScreen> {
             errors['csurname'] = 'Last name is required.';
           }
         }
+        if (currentStep == 1) {
+          if (_companyNameController.text.trim().isEmpty) {
+            errors['ccompanyname'] = 'Company name is required.';
+          }
+        }
         if (currentStep == 2) {
+          final email = _emailController.text.trim();
+          if (email.isEmpty) {
+            errors['cemail'] = 'Email is required.';
+          } else if (!_isValidEmail(email)) {
+            errors['cemail'] = 'Enter a valid email address.';
+          }
           _validateRequiredPhone(
             key: 'cphonenum',
             label: 'Phone number',
@@ -661,18 +709,64 @@ class _AddButtonsScreenState extends State<AddButtonsScreen> {
             errors['unitsofmeasurement'] = 'UOM is required.';
           }
         }
-        if (currentStep == 2 && _contractDate == null) {
-          errors['contract_date'] = 'Contract date is required.';
+        if (currentStep == 1) {
+          final hasSerial = _productSerialControllers
+              .any((c) => c.text.trim().isNotEmpty);
+          if (!hasSerial) {
+            errors['serial_number'] = 'At least one serial number is required.';
+          }
+        }
+        if (currentStep == 2) {
+          if (_contractDate == null) {
+            errors['contract_date'] = 'Contract date is required.';
+          }
+          if (_deliveryDate == null) {
+            errors['delivery_date'] = 'Delivery date is required.';
+          }
+          if (_installationDate == null) {
+            errors['installation_date'] = 'Installation date is required.';
+          }
+          if (_salesPersonName == null || _selectedEmployeeId == null) {
+            errors['employee_id'] = 'Sales Person is required.';
+          }
         }
         break;
       case AddMode.service:
         if (currentStep == 0) {
+          if (_pickedFile == null) {
+            errors['service_file'] = 'File is required.';
+          }
           if (_serviceOrderReportNoController.text.trim().isEmpty) {
             errors['service_order_report_no'] =
                 'Service Order Report No. is required.';
           }
           if ((_selectedServiceTypeId ?? '').trim().isEmpty) {
             errors['service_type_id'] = 'Service type is required.';
+          }
+        }
+        if (currentStep == 1) {
+          // At least one serial number must be selected.
+          final hasSerial = _serviceSerialIds.whereType<int>().isNotEmpty;
+          if (!hasSerial) {
+            errors['service_serial'] =
+                'At least one serial number is required.';
+          }
+          // Check stock for each selected spare part (spare parts are optional).
+          for (int i = 0; i < _serviceSparePartRows.length; i++) {
+            final row = _serviceSparePartRows[i];
+            if (row.sparePartId != null) {
+              final part = _sparePartModels
+                  .cast<SparePartModel?>()
+                  .firstWhere((m) => m?.id == row.sparePartId,
+                      orElse: () => null);
+              if (part != null && part.spquantity <= 0) {
+                errors['spare_parts.$i.spare_part_id'] =
+                    '${part.sparepartsname} is out of stock.';
+              } else if (part != null && row.quantity > part.spquantity) {
+                errors['spare_part_qty_$i'] =
+                    'Only ${part.spquantity} in stock.';
+              }
+            }
           }
         }
         if (currentStep == 2 && _serviceDate == null) {
@@ -686,6 +780,9 @@ class _AddButtonsScreenState extends State<AddButtonsScreen> {
           }
           if ((_shopRegion ?? '').trim().isEmpty) {
             errors['region'] = 'Region is required.';
+          }
+          if ((_shopProvince ?? '').trim().isEmpty) {
+            errors['province'] = 'Province is required.';
           }
           if ((_shopCity ?? '').trim().isEmpty) {
             errors['city'] = 'Municipality / City is required.';
@@ -785,22 +882,31 @@ class _AddButtonsScreenState extends State<AddButtonsScreen> {
         content = Column(
           children: [
             _buildTextField(_firstNameController,
-                hint: 'First Name', errorText: _fieldErrors['cfirstname']),
+                hint: 'First Name',
+                errorText: _fieldErrors['cfirstname'],
+                textCapitalization: TextCapitalization.words),
             const SizedBox(height: 16),
-            _buildTextField(_middleNameController, hint: 'Middle Name'),
+            _buildTextField(_middleNameController,
+                hint: 'Middle Name',
+                textCapitalization: TextCapitalization.words),
             const SizedBox(height: 16),
             _buildTextField(_lastNameController,
-                hint: 'Last Name', errorText: _fieldErrors['csurname']),
+                hint: 'Last Name',
+                errorText: _fieldErrors['csurname'],
+                textCapitalization: TextCapitalization.words),
           ],
         );
         break;
       case 1:
-        content = _buildTextField(_companyNameController, hint: 'Company Name');
+        content = _buildTextField(_companyNameController,
+            hint: 'Company Name', errorText: _fieldErrors['ccompanyname']);
         break;
       case 2:
         content = Column(
           children: [
-            _buildTextField(_emailController, hint: 'Email Address (Optional)'),
+            _buildTextField(_emailController,
+                hint: 'Email Address',
+                errorText: _fieldErrors['cemail']),
             const SizedBox(height: 16),
             _buildTextField(_phoneController,
                 hint: 'Phone Number',
@@ -855,9 +961,13 @@ class _AddButtonsScreenState extends State<AddButtonsScreen> {
       case 0:
         return Column(
           children: [
-            _buildDropdown('Select Model Name', _modelName, _modelNames,
-                (v) => _onModelNameChanged(v),
-                errorText: _fieldErrors['model_name']),
+            _buildSearchableDropdownField(
+              hint: 'Select Model Name',
+              value: _modelName,
+              items: _modelNames,
+              onChanged: (v) => _onModelNameChanged(v),
+              errorText: _fieldErrors['model_name'],
+            ),
             const SizedBox(height: 12),
             Row(
               children: [
@@ -931,6 +1041,15 @@ class _AddButtonsScreenState extends State<AddButtonsScreen> {
               ],
             ),
             const SizedBox(height: 8),
+            if (_fieldErrors['serial_number'] != null)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Text(
+                  _fieldErrors['serial_number']!,
+                  style: const TextStyle(
+                      fontSize: 12, color: Color(0xFFB91C1C)),
+                ),
+              ),
             ..._productSerialControllers.asMap().entries.map((entry) {
               final i = entry.key;
               final ctrl = entry.value;
@@ -940,7 +1059,10 @@ class _AddButtonsScreenState extends State<AddButtonsScreen> {
                   children: [
                     Expanded(
                         child: _buildTextField(ctrl,
-                            hint: 'Serial Number')),
+                            hint: 'Serial Number',
+                            textCapitalization: TextCapitalization.characters,
+                            inputFormatters: [_UpperCaseTextFormatter()])),
+
                     if (_productSerialControllers.length > 1) ...[
                       const SizedBox(width: 8),
                       _buildRedRemoveButton(() {
@@ -972,15 +1094,33 @@ class _AddButtonsScreenState extends State<AddButtonsScreen> {
             const SizedBox(height: 12),
             _buildDateField('Delivery Date', _deliveryDate,
                 (d) => setState(() => _deliveryDate = d)),
+            if (_fieldErrors['delivery_date'] != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Text(
+                  _fieldErrors['delivery_date']!,
+                  style:
+                      const TextStyle(fontSize: 12, color: Color(0xFFB91C1C)),
+                ),
+              ),
             const SizedBox(height: 12),
             _buildDateField('Installation Date', _installationDate,
                 (d) => setState(() => _installationDate = d)),
+            if (_fieldErrors['installation_date'] != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Text(
+                  _fieldErrors['installation_date']!,
+                  style:
+                      const TextStyle(fontSize: 12, color: Color(0xFFB91C1C)),
+                ),
+              ),
             const SizedBox(height: 12),
-            _buildDropdown(
-              'Sales Person',
-              _salesPersonName,
-              _technicianOptions,
-              (v) {
+            _buildSearchableDropdownField(
+              hint: 'Sales Person',
+              value: _salesPersonName,
+              items: _technicianOptions,
+              onChanged: (v) {
                 setState(() {
                   _salesPersonName = v;
                   final match = _employees.cast<Employee?>().firstWhere(
@@ -1046,6 +1186,15 @@ class _AddButtonsScreenState extends State<AddButtonsScreen> {
                 ),
               ),
             ),
+            if (_fieldErrors['service_file'] != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Text(
+                  _fieldErrors['service_file']!,
+                  style: const TextStyle(
+                      fontSize: 12, color: Color(0xFFB91C1C)),
+                ),
+              ),
             const SizedBox(height: 12),
             _buildTextField(
               _serviceOrderReportNoController,
@@ -1053,11 +1202,11 @@ class _AddButtonsScreenState extends State<AddButtonsScreen> {
               errorText: _fieldErrors['service_order_report_no'],
             ),
             const SizedBox(height: 12),
-            _buildDropdown(
-              'Select Service Type',
-              _serviceType,
-              _serviceTypes,
-              (v) {
+            _buildSearchableDropdownField(
+              hint: 'Select Service Type',
+              value: _serviceType,
+              items: _serviceTypes,
+              onChanged: (v) {
                 setState(() {
                   _serviceType = v;
                   final idx = _serviceTypes.indexOf(v ?? '');
@@ -1095,6 +1244,15 @@ class _AddButtonsScreenState extends State<AddButtonsScreen> {
               ),
             ),
             const SizedBox(height: 10),
+            if (_fieldErrors['service_serial'] != null)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Text(
+                  _fieldErrors['service_serial']!,
+                  style: const TextStyle(
+                      fontSize: 12, color: Color(0xFFB91C1C)),
+                ),
+              ),
             ..._serviceSerialIds.asMap().entries.map((entry) {
               final i = entry.key;
               final selectedId = entry.value;
@@ -1102,11 +1260,11 @@ class _AddButtonsScreenState extends State<AddButtonsScreen> {
                   .whereType<int>()
                   .where((id) => id != selectedId)
                   .toSet();
-              final _seenSerials = <String>{};
+              final seenSerials = <String>{};
               final available = _serialNumberModels
                   .where((m) =>
                       !usedIds.contains(m.id) &&
-                      _seenSerials.add(m.serialnumber))
+                      seenSerials.add(m.serialnumber))
                   .toList();
               final selectedName = _serialNumberModels
                   .cast<SerialNumberModel?>()
@@ -1115,18 +1273,30 @@ class _AddButtonsScreenState extends State<AddButtonsScreen> {
                   ?.serialnumber;
               return Padding(
                 padding: const EdgeInsets.only(bottom: 10),
-                child: _buildDropdown(
-                  'Select Serial Number',
-                  selectedName,
-                  available.map((m) => m.serialnumber).toList(),
-                  (v) => setState(() {
-                    final model = _serialNumberModels
-                        .cast<SerialNumberModel?>()
-                        .firstWhere(
-                            (m) => m?.serialnumber == v,
-                            orElse: () => null);
-                    _serviceSerialIds[i] = model?.id;
-                  }),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: _buildSearchableDropdownField(
+                        hint: 'Select Serial Number',
+                        value: selectedName,
+                        items: available.map((m) => m.serialnumber).toList(),
+                        onChanged: (v) => setState(() {
+                          final model = _serialNumberModels
+                              .cast<SerialNumberModel?>()
+                              .firstWhere(
+                                  (m) => m?.serialnumber == v,
+                                  orElse: () => null);
+                          _serviceSerialIds[i] = model?.id;
+                        }),
+                      ),
+                    ),
+                    if (_serviceSerialIds.length > 1) ...[
+                      const SizedBox(width: 8),
+                      _buildRedRemoveButton(() {
+                        setState(() => _serviceSerialIds.removeAt(i));
+                      }),
+                    ],
+                  ],
                 ),
               );
             }),
@@ -1149,6 +1319,15 @@ class _AddButtonsScreenState extends State<AddButtonsScreen> {
               ],
             ),
             const SizedBox(height: 8),
+            if (_fieldErrors['service_spare'] != null)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Text(
+                  _fieldErrors['service_spare']!,
+                  style: const TextStyle(
+                      fontSize: 12, color: Color(0xFFB91C1C)),
+                ),
+              ),
             ..._serviceSparePartRows.asMap().entries.map((entry) {
               final i = entry.key;
               final row = entry.value;
@@ -1175,15 +1354,52 @@ class _AddButtonsScreenState extends State<AddButtonsScreen> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              _buildSparePartDropdown(
-                                row.sparePartId,
-                                availableParts,
-                                (id) => setState(() {
-                                  _serviceSparePartRows[i] = _SparePartRow(
-                                      sparePartId: id,
-                                      quantity: row.quantity);
-                                }),
-                              ),
+                              Builder(builder: (_) {
+                                final nameCounts = <String, int>{};
+                                for (final m in _sparePartModels) {
+                                  nameCounts[m.sparepartsname] =
+                                      (nameCounts[m.sparepartsname] ?? 0) + 1;
+                                }
+                                String labelFor(SparePartModel m) {
+                                  if ((nameCounts[m.sparepartsname] ?? 1) > 1) {
+                                    return '${m.sparepartsname} (qty: ${m.spquantity})';
+                                  }
+                                  return m.sparepartsname;
+                                }
+                                final seen = <int>{};
+                                final uniqueParts = availableParts
+                                    .where((m) => seen.add(m.id))
+                                    .toList();
+                                final labels = uniqueParts
+                                    .map((m) => labelFor(m))
+                                    .toList();
+                                final selectedPart = row.sparePartId != null
+                                    ? uniqueParts
+                                        .cast<SparePartModel?>()
+                                        .firstWhere(
+                                            (m) => m?.id == row.sparePartId,
+                                            orElse: () => null)
+                                    : null;
+                                final selectedLabel = selectedPart != null
+                                    ? labelFor(selectedPart)
+                                    : null;
+                                return _buildSearchableDropdownField(
+                                  hint: 'Select Spare Parts',
+                                  value: selectedLabel,
+                                  items: labels,
+                                  onChanged: (v) {
+                                    final idx = labels.indexOf(v ?? '');
+                                    final partId = idx >= 0
+                                        ? uniqueParts[idx].id
+                                        : null;
+                                    setState(() {
+                                      _serviceSparePartRows[i] = _SparePartRow(
+                                          sparePartId: partId,
+                                          quantity: row.quantity);
+                                    });
+                                  },
+                                );
+                              }),
                               if (partIdError != null)
                                 Padding(
                                   padding: const EdgeInsets.only(top: 4),
@@ -1248,18 +1464,30 @@ class _AddButtonsScreenState extends State<AddButtonsScreen> {
               final i = entry.key;
               return Padding(
                 padding: const EdgeInsets.only(bottom: 10),
-                child: _buildDropdown(
-                  'Technician',
-                  _selectedTechnicians[i],
-                  _technicianOptions,
-                  (v) => setState(() {
-                    _selectedTechnicians[i] = v;
-                    final match = _employees.cast<Employee?>().firstWhere(
-                          (e) => e != null && e.name == v,
-                          orElse: () => null,
-                        );
-                    _selectedEmployeeId = match?.id;
-                  }),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: _buildSearchableDropdownField(
+                        hint: 'Technician',
+                        value: _selectedTechnicians[i],
+                        items: _technicianOptions,
+                        onChanged: (v) => setState(() {
+                          _selectedTechnicians[i] = v;
+                          final match = _employees.cast<Employee?>().firstWhere(
+                                (e) => e != null && e.name == v,
+                                orElse: () => null,
+                              );
+                          _selectedEmployeeId = match?.id;
+                        }),
+                      ),
+                    ),
+                    if (_selectedTechnicians.length > 1) ...[
+                      const SizedBox(width: 8),
+                      _buildRedRemoveButton(() {
+                        setState(() => _selectedTechnicians.removeAt(i));
+                      }),
+                    ],
+                  ],
                 ),
               );
             }),
@@ -1268,9 +1496,9 @@ class _AddButtonsScreenState extends State<AddButtonsScreen> {
               child: TextButton.icon(
                 onPressed: () =>
                     setState(() => _selectedTechnicians.add(null)),
-                icon: const Icon(Icons.add, size: 14),
+                icon: const Icon(Icons.add, size: 16),
                 label:
-                    const Text('+ Add More', style: TextStyle(fontSize: 12)),
+                    const Text('Add More', style: TextStyle(fontSize: 12)),
                 style: TextButton.styleFrom(
                   foregroundColor: const Color(0xFF2563EB),
                   padding: EdgeInsets.zero,
@@ -1295,13 +1523,20 @@ class _AddButtonsScreenState extends State<AddButtonsScreen> {
   Widget addShopDetails() {
     switch (currentStep) {
       case 0:
-        final cityOptions = _shopRegion != null
-            ? PhilippineAddressData.citiesFor(_shopRegion!)
+        final provinceOptions = _shopRegion != null
+            ? PhilippineFullAddressData.provincesFor(_shopRegion!)
             : <String>[];
+        final cityOptions =
+            (_shopRegion != null && _shopProvince != null)
+                ? PhilippineFullAddressData.citiesFor(
+                    _shopRegion!, _shopProvince!)
+                : <String>[];
         final barangayOptions =
-            (_shopRegion != null && _shopCity != null)
-                ? PhilippineAddressData.barangaysFor(
-                    _shopRegion!, _shopCity!)
+            (_shopRegion != null &&
+                    _shopProvince != null &&
+                    _shopCity != null)
+                ? PhilippineFullAddressData.barangaysFor(
+                    _shopRegion!, _shopProvince!, _shopCity!)
                 : <String>[];
 
         return Column(
@@ -1319,13 +1554,26 @@ class _AddButtonsScreenState extends State<AddButtonsScreen> {
             _buildDropdown(
               'Region',
               _shopRegion,
-              PhilippineAddressData.regions,
+              PhilippineFullAddressData.regions,
               (v) => setState(() {
                 _shopRegion = v;
+                _shopProvince = null;
                 _shopCity = null;
                 _shopBarangay = null;
               }),
               errorText: _fieldErrors['region'],
+            ),
+            const SizedBox(height: 12),
+            _buildDropdown(
+              'Province',
+              _shopProvince,
+              provinceOptions,
+              (v) => setState(() {
+                _shopProvince = v;
+                _shopCity = null;
+                _shopBarangay = null;
+              }),
+              errorText: _fieldErrors['province'],
             ),
             const SizedBox(height: 12),
             _buildDropdown(
@@ -1479,9 +1727,8 @@ class _AddButtonsScreenState extends State<AddButtonsScreen> {
                 ? 'Add Service'
                 : 'Add Shop';
 
-    // Client uses blue indicators; product/service use amber
-    final Color activeColor =
-        isClient ? const Color(0xFF2563EB) : const Color(0xFFFFC300);
+    // All modes use amber step indicators
+    const Color activeColor = Color(0xFFFFC300);
 
     return Scaffold(
       backgroundColor: isClient ? Colors.white : const Color(0xFFF5F7FA),
@@ -1592,13 +1839,34 @@ class _AddButtonsScreenState extends State<AddButtonsScreen> {
             ),
 
             // Bottom button
-            if (isClient)
+            if (isClient && isLastStep)
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: _isSubmitting || _isLoadingDependencies
+                      ? null
+                      : _showConfirmDialog,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFFFC300),
+                    foregroundColor: Colors.black,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8)),
+                    elevation: 0,
+                  ),
+                  child: const Text(
+                    'Add Client',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                  ),
+                ),
+              )
+            else if (isClient)
               Align(
                 alignment: Alignment.centerRight,
                 child: ElevatedButton(
                   onPressed: _isSubmitting || _isLoadingDependencies
                       ? null
-                      : (isLastStep ? _showConfirmDialog : _nextStep),
+                      : _nextStep,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF2563EB),
                     foregroundColor: Colors.white,
@@ -1608,10 +1876,9 @@ class _AddButtonsScreenState extends State<AddButtonsScreen> {
                         borderRadius: BorderRadius.circular(8)),
                     elevation: 0,
                   ),
-                  child: Text(
-                    isLastStep ? 'Add Client' : 'Next',
-                    style: const TextStyle(
-                        fontSize: 16, fontWeight: FontWeight.w600),
+                  child: const Text(
+                    'Next',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
                   ),
                 ),
               )
@@ -1709,6 +1976,11 @@ class _AddButtonsScreenState extends State<AddButtonsScreen> {
               _emailController.text.isEmpty ? '-' : _emailController.text),
           _summaryRow('Phone No.',
               _phoneController.text.isEmpty ? '-' : _phoneController.text),
+          _summaryRow(
+              'Notes',
+              _clientNotesController.text.trim().isEmpty
+                  ? 'N/A'
+                  : _clientNotesController.text.trim()),
         ];
         break;
       case AddMode.product:
@@ -1737,6 +2009,20 @@ class _AddButtonsScreenState extends State<AddButtonsScreen> {
           _summaryRow(
               'Serial Numbers',
               productSerialSummary.isEmpty ? '-' : productSerialSummary),
+          _summaryRow('Contract Date',
+              _contractDate != null ? _formatDate(_contractDate) ?? '-' : '-'),
+          _summaryRow('Delivery Date',
+              _deliveryDate != null ? _formatDate(_deliveryDate) ?? '-' : '-'),
+          _summaryRow('Installation Date',
+              _installationDate != null
+                  ? _formatDate(_installationDate) ?? '-'
+                  : '-'),
+          _summaryRow('Sales Person', _salesPersonName ?? '-'),
+          _summaryRow(
+              'Notes',
+              _productNotesController.text.trim().isEmpty
+                  ? 'N/A'
+                  : _productNotesController.text.trim()),
         ];
         break;
       case AddMode.service:
@@ -1833,7 +2119,11 @@ class _AddButtonsScreenState extends State<AddButtonsScreen> {
         ),
         padding: EdgeInsets.fromLTRB(
             24, 20, 24, MediaQuery.of(context).viewInsets.bottom + 32),
-        child: Column(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(context).size.height * 0.8,
+          ),
+          child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -1848,7 +2138,14 @@ class _AddButtonsScreenState extends State<AddButtonsScreen> {
                 ),
               ),
             ),
-            ...rows,
+            Flexible(
+              child: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: rows,
+                ),
+              ),
+            ),
             const SizedBox(height: 24),
             SizedBox(
               width: double.infinity,
@@ -1874,13 +2171,14 @@ class _AddButtonsScreenState extends State<AddButtonsScreen> {
             ),
           ],
         ),
+        ),
       ),
     );
   }
 
   Future<void> _submitCurrentMode() async {
     if (widget.mode == AddMode.client) {
-      await _submitClient();
+      await _checkAndSubmitClient();
       return;
     }
 
@@ -1900,6 +2198,146 @@ class _AddButtonsScreenState extends State<AddButtonsScreen> {
     }
 
     if (mounted) Navigator.pop(context);
+  }
+
+  /// Checks for a duplicate name before submitting. If a match is found,
+  /// shows a warning dialog. The user can proceed (name gets a (1) suffix)
+  /// or cancel and go back to edit.
+  Future<void> _checkAndSubmitClient() async {
+    final firstName = _toTitleCase(_firstNameController.text);
+    final lastName = _toTitleCase(_lastNameController.text);
+
+    setState(() {
+      _isSubmitting = true;
+      _globalError = null;
+    });
+
+    Map<String, dynamic> dupData;
+    try {
+      dupData = await _api.checkClientDuplicate(
+          firstName: firstName, lastName: lastName);
+    } catch (_) {
+      // If check fails, proceed without blocking the user.
+      dupData = {'exists': false};
+    }
+
+    setState(() => _isSubmitting = false);
+    if (!mounted) return;
+
+    final exists = dupData['exists'] == true;
+    if (exists) {
+      final fullName = '$firstName $lastName';
+      final proceed = await showDialog<bool>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => AlertDialog(
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          contentPadding:
+              const EdgeInsets.fromLTRB(24, 28, 24, 16),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 64,
+                height: 64,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                      color: const Color(0xFFFFC300), width: 2.5),
+                ),
+                child: const Icon(Icons.warning_amber_rounded,
+                    color: Color(0xFFFFC300), size: 36),
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'Duplicate Name Found',
+                style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.black87),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 12),
+              RichText(
+                textAlign: TextAlign.center,
+                text: TextSpan(
+                  style: const TextStyle(
+                      fontSize: 14, color: Colors.black54, height: 1.5),
+                  children: [
+                    const TextSpan(
+                        text:
+                            'There is an existing client with the name '),
+                    TextSpan(
+                      text: '"$fullName"',
+                      style: const TextStyle(
+                          fontWeight: FontWeight.w700,
+                          color: Colors.black87),
+                    ),
+                    const TextSpan(
+                        text:
+                            '.\n\nWould you like to continue? The name will be saved as '),
+                    TextSpan(
+                      text: '"$fullName (1)"',
+                      style: const TextStyle(
+                          fontWeight: FontWeight.w700,
+                          color: Colors.black87),
+                    ),
+                    const TextSpan(text: '.'),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 24),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.pop(context, false),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: const Color(0xFFEF4444),
+                        side: const BorderSide(color: Color(0xFFEF4444)),
+                        padding:
+                            const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8)),
+                      ),
+                      child: const Text('No, Cancel',
+                          style: TextStyle(
+                              fontWeight: FontWeight.w600)),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: () => Navigator.pop(context, true),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF2563EB),
+                        foregroundColor: Colors.white,
+                        padding:
+                            const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8)),
+                        elevation: 0,
+                      ),
+                      child: const Text('Yes, Continue',
+                          style: TextStyle(
+                              fontWeight: FontWeight.w600)),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      );
+
+      if (!mounted || proceed != true) return;
+
+      // Append (1) suffix to first name so the full name becomes unique.
+      _firstNameController.text = '$firstName (1)';
+    }
+
+    await _submitClient();
   }
 
   Future<void> _submitClient() async {
@@ -1923,18 +2361,16 @@ class _AddButtonsScreenState extends State<AddButtonsScreen> {
     });
 
     final payload = <String, dynamic>{
-      'cfirstname': _firstNameController.text.trim(),
+      'cfirstname': _toTitleCase(_firstNameController.text),
       'cmiddlename': _middleNameController.text.trim().isEmpty
           ? null
-          : _middleNameController.text.trim(),
-      'csurname': _lastNameController.text.trim(),
+          : _toTitleCase(_middleNameController.text),
+      'csurname': _toTitleCase(_lastNameController.text),
       'client_type_id': _selectedClientTypeId,
       'ccompanyname': _companyNameController.text.trim().isEmpty
           ? null
           : _companyNameController.text.trim(),
-      'cemail': _emailController.text.trim().isEmpty
-          ? null
-          : _emailController.text.trim(),
+      'cemail': _emailController.text.trim(),
       'cphonenum': _phoneController.text.trim(),
       'notes': _clientNotesController.text.trim().isEmpty
           ? null
@@ -2255,6 +2691,15 @@ class _AddButtonsScreenState extends State<AddButtonsScreen> {
     if (_lastNameController.text.trim().isEmpty) {
       errors['csurname'] = 'Last name is required.';
     }
+    if (_companyNameController.text.trim().isEmpty) {
+      errors['ccompanyname'] = 'Company name is required.';
+    }
+    final email = _emailController.text.trim();
+    if (email.isEmpty) {
+      errors['cemail'] = 'Email is required.';
+    } else if (!_isValidEmail(email)) {
+      errors['cemail'] = 'Enter a valid email address.';
+    }
     _validateRequiredPhone(
       key: 'cphonenum',
       label: 'Phone number',
@@ -2277,6 +2722,12 @@ class _AddButtonsScreenState extends State<AddButtonsScreen> {
     }
     if (_contractDate == null) {
       errors['contract_date'] = 'Contract date is required.';
+    }
+    if (_deliveryDate == null) {
+      errors['delivery_date'] = 'Delivery date is required.';
+    }
+    if (_installationDate == null) {
+      errors['installation_date'] = 'Installation date is required.';
     }
     if (_resolveScopedClientId() == null) {
       errors['client_id'] = 'Client is required.';
@@ -2436,6 +2887,9 @@ class _AddButtonsScreenState extends State<AddButtonsScreen> {
     if ((_shopRegion ?? '').trim().isEmpty) {
       errors['region'] = 'Region is required.';
     }
+    if ((_shopProvince ?? '').trim().isEmpty) {
+      errors['province'] = 'Province is required.';
+    }
     if ((_shopCity ?? '').trim().isEmpty) {
       errors['city'] = 'Municipality / City is required.';
     }
@@ -2564,6 +3018,14 @@ class _AddButtonsScreenState extends State<AddButtonsScreen> {
 
   // ── Shared helpers ───────────────────────────────────────────────────────
 
+  /// Converts each word's first letter to uppercase and the rest to lowercase.
+  String _toTitleCase(String text) {
+    return text.trim().split(RegExp(r'\s+')).map((word) {
+      if (word.isEmpty) return word;
+      return word[0].toUpperCase() + word.substring(1).toLowerCase();
+    }).join(' ');
+  }
+
   Widget _buildStepIndicator(int step, Color activeColor) {
     final bool isCompleted = step < currentStep;
     final bool isCurrent = step == currentStep;
@@ -2574,7 +3036,7 @@ class _AddButtonsScreenState extends State<AddButtonsScreen> {
       decoration: BoxDecoration(
         shape: BoxShape.circle,
         color: isCompleted || isCurrent ? activeColor : Colors.grey[300],
-        boxShadow: (isCompleted || isCurrent) && widget.mode == AddMode.client
+        boxShadow: (isCompleted || isCurrent)
             ? [
                 BoxShadow(
                   color: activeColor.withOpacity(0.35),
@@ -2608,6 +3070,7 @@ class _AddButtonsScreenState extends State<AddButtonsScreen> {
     TextInputType keyboardType = TextInputType.text,
     List<TextInputFormatter>? inputFormatters,
     int? maxLength,
+    TextCapitalization textCapitalization = TextCapitalization.none,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -2619,6 +3082,7 @@ class _AddButtonsScreenState extends State<AddButtonsScreen> {
           keyboardType: keyboardType,
           inputFormatters: inputFormatters,
           maxLength: maxLength,
+          textCapitalization: textCapitalization,
           style: const TextStyle(fontSize: 14, color: Colors.black87),
           decoration: InputDecoration(
             hintText: hint,
@@ -2865,13 +3329,17 @@ class _AddButtonsScreenState extends State<AddButtonsScreen> {
   ) {
     final display =
         value != null ? '${value.month}/${value.day}/${value.year}' : '';
+    final today = DateTime.now();
+    final firstAllowed = DateTime(today.year, today.month, today.day);
     return InkWell(
       onTap: () async {
         final picked = await showDatePicker(
           context: context,
-          initialDate: value ?? DateTime.now(),
-          firstDate: DateTime(2020),
-          lastDate: DateTime(2030),
+          initialDate: (value != null && !value.isBefore(firstAllowed))
+              ? value
+              : firstAllowed,
+          firstDate: firstAllowed,
+          lastDate: DateTime(2035),
         );
         if (picked != null) onPicked(picked);
       },
@@ -2931,6 +3399,87 @@ class _AddButtonsScreenState extends State<AddButtonsScreen> {
         ),
         child: const Icon(Icons.delete_outline,
             size: 20, color: Colors.white),
+      ),
+    );
+  }
+
+  /// Searchable dropdown field — shows a bottom sheet with a live-filter
+  /// search input. Used for Sales Person selection.
+  Widget _buildSearchableDropdownField({
+    required String hint,
+    required String? value,
+    required List<String> items,
+    required ValueChanged<String?> onChanged,
+    String? errorText,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        InkWell(
+          onTap: () => _showSearchPicker(
+            hint: hint,
+            items: items,
+            selected: value,
+            onSelected: onChanged,
+          ),
+          child: Container(
+            padding:
+                const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                color: errorText != null
+                    ? const Color(0xFFB91C1C)
+                    : Colors.grey[300]!,
+              ),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    value ?? hint,
+                    style: TextStyle(
+                      fontSize: 14,
+                      color:
+                          value != null ? Colors.black87 : Colors.grey[400],
+                    ),
+                  ),
+                ),
+                Icon(Icons.arrow_drop_down, color: Colors.grey[500]),
+              ],
+            ),
+          ),
+        ),
+        if (errorText != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Text(
+              errorText,
+              style: const TextStyle(
+                  fontSize: 12, color: Color(0xFFB91C1C)),
+            ),
+          ),
+      ],
+    );
+  }
+
+  void _showSearchPicker({
+    required String hint,
+    required List<String> items,
+    required String? selected,
+    required ValueChanged<String?> onSelected,
+  }) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => _FullScreenSearchPicker(
+          hint: hint,
+          items: items,
+          selected: selected,
+          onSelected: (item) {
+            onSelected(item);
+          },
+        ),
       ),
     );
   }
@@ -2997,4 +3546,118 @@ class _SparePartRow {
   int quantity;
 
   _SparePartRow({this.sparePartId, this.quantity = 1});
+}
+
+/// Forces all typed/pasted text to uppercase.
+class _UpperCaseTextFormatter extends TextInputFormatter {
+  @override
+  TextEditingValue formatEditUpdate(
+      TextEditingValue oldValue, TextEditingValue newValue) {
+    return newValue.copyWith(
+      text: newValue.text.toUpperCase(),
+      selection: newValue.selection,
+    );
+  }
+}
+
+/// Full-screen search picker pushed via Navigator.
+class _FullScreenSearchPicker extends StatefulWidget {
+  final String hint;
+  final List<String> items;
+  final String? selected;
+  final ValueChanged<String?> onSelected;
+
+  const _FullScreenSearchPicker({
+    required this.hint,
+    required this.items,
+    required this.selected,
+    required this.onSelected,
+  });
+
+  @override
+  State<_FullScreenSearchPicker> createState() =>
+      _FullScreenSearchPickerState();
+}
+
+class _FullScreenSearchPickerState extends State<_FullScreenSearchPicker> {
+  String _query = '';
+  late final TextEditingController _searchController;
+
+  @override
+  void initState() {
+    super.initState();
+    _searchController = TextEditingController();
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final filtered = widget.items
+        .where((s) => s.toLowerCase().contains(_query.toLowerCase()))
+        .toList();
+
+    return Scaffold(
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        elevation: 0.5,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: Colors.black87),
+          onPressed: () => Navigator.pop(context),
+        ),
+        title: Text(
+          widget.hint,
+          style: const TextStyle(
+            color: Colors.black87,
+            fontSize: 18,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ),
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(12),
+            child: TextField(
+              controller: _searchController,
+              autofocus: true,
+              decoration: InputDecoration(
+                hintText: 'Search ${widget.hint}...',
+                prefixIcon: const Icon(Icons.search),
+                border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8)),
+                contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 12, vertical: 10),
+                isDense: true,
+              ),
+              onChanged: (v) => setState(() => _query = v),
+            ),
+          ),
+          const Divider(height: 1),
+          Expanded(
+            child: ListView.builder(
+              itemCount: filtered.length,
+              itemBuilder: (_, i) {
+                final item = filtered[i];
+                return ListTile(
+                  title: Text(item, style: const TextStyle(fontSize: 14)),
+                  trailing: item == widget.selected
+                      ? const Icon(Icons.check, color: Color(0xFFFFC300))
+                      : null,
+                  onTap: () {
+                    Navigator.pop(context);
+                    widget.onSelected(item);
+                  },
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }

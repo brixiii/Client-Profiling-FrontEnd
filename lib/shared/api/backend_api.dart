@@ -361,6 +361,23 @@ class BackendApi {
     return _unwrapSingle(result);
   }
 
+  /// Returns the duplicate-check response from GET /clients/check-duplicate.
+  /// Response shape: { "success": true, "data": { "exists": bool, "count": int, "clients": [...] } }
+  Future<Map<String, dynamic>> checkClientDuplicate({
+    required String firstName,
+    required String lastName,
+  }) async {
+    final result = await _api.get('/clients/check-duplicate', query: {
+      'first_name': firstName,
+      'last_name': lastName,
+    });
+    if (result is Map<String, dynamic>) {
+      final data = result['data'];
+      if (data is Map<String, dynamic>) return data;
+    }
+    return {'exists': false, 'count': 0, 'clients': []};
+  }
+
   Future<Map<String, dynamic>> createClient(
       Map<String, dynamic> payload) async {
     final result = await _api.post('/clients', body: payload);
@@ -878,6 +895,26 @@ class BackendApi {
       if (shopProductId != null) 'shop_product_id': shopProductId,
     });
     return _parsePage<SerialNumberModel>(result, SerialNumberModel.fromJson);
+  }
+
+  /// Fetches all serial numbers across all pages for the given filters.
+  Future<List<SerialNumberModel>> fetchAllSerialNumbers({
+    int? clientId,
+    int? shopProductId,
+  }) async {
+    const perPage = 100;
+    final first = await getSerialNumbers(
+        page: 1, perPage: perPage,
+        clientId: clientId, shopProductId: shopProductId);
+    final all = List<SerialNumberModel>.from(first.data);
+    for (int p = 2; p <= first.lastPage; p++) {
+      final page = await getSerialNumbers(
+          page: p, perPage: perPage,
+          clientId: clientId, shopProductId: shopProductId);
+      all.addAll(page.data);
+    }
+    final seen = <int>{};
+    return all.where((m) => seen.add(m.id)).toList();
   }
 
   Future<SerialNumberModel> getSerialNumberById(int id) async {

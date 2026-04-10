@@ -1,5 +1,8 @@
 ﻿import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../../../../../../shared/api/backend_api.dart';
+import '../../../../../../shared/api/paginated_response.dart';
+import '../../../../../../shared/models/reseller.dart';
 import '../../../../../../shared/widgets/custom_app_bar.dart';
 
 class AddResellerScreen extends StatefulWidget {
@@ -97,7 +100,7 @@ class _AddResellerScreenState extends State<AddResellerScreen> {
                 child: ElevatedButton(
                   onPressed: () {
                     Navigator.pop(context); // close sheet
-                    _submitReseller();
+                    _checkAndSubmitReseller();
                   },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFFFFC300),
@@ -116,6 +119,135 @@ class _AddResellerScreenState extends State<AddResellerScreen> {
         ),
       ),
     );
+  }
+
+  Future<void> _checkAndSubmitReseller() async {
+    final companyName = _nameController.text.trim();
+
+    // Check for duplicate company name
+    bool exists = false;
+    try {
+      final response = await _api.getResellers(
+          page: 1, perPage: 100, q: companyName);
+      exists = response.data.any((r) =>
+          r.companyName.toLowerCase() == companyName.toLowerCase());
+    } catch (_) {
+      exists = false;
+    }
+
+    if (!mounted) return;
+
+    if (exists) {
+      final proceed = await showDialog<bool>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => AlertDialog(
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          contentPadding:
+              const EdgeInsets.fromLTRB(24, 28, 24, 16),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 64,
+                height: 64,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                      color: const Color(0xFFFFC300), width: 2.5),
+                ),
+                child: const Icon(Icons.warning_amber_rounded,
+                    color: Color(0xFFFFC300), size: 36),
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'Duplicate Name Found',
+                style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.black87),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 12),
+              RichText(
+                textAlign: TextAlign.center,
+                text: TextSpan(
+                  style: const TextStyle(
+                      fontSize: 14, color: Colors.black54, height: 1.5),
+                  children: [
+                    const TextSpan(
+                        text:
+                            'There is an existing reseller with the name '),
+                    TextSpan(
+                      text: '"$companyName"',
+                      style: const TextStyle(
+                          fontWeight: FontWeight.w700,
+                          color: Colors.black87),
+                    ),
+                    const TextSpan(
+                        text:
+                            '.\n\nWould you like to continue? The name will be saved as '),
+                    TextSpan(
+                      text: '"$companyName (1)"',
+                      style: const TextStyle(
+                          fontWeight: FontWeight.w700,
+                          color: Colors.black87),
+                    ),
+                    const TextSpan(text: '.'),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 24),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.pop(context, false),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: const Color(0xFFEF4444),
+                        side: const BorderSide(color: Color(0xFFEF4444)),
+                        padding:
+                            const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8)),
+                      ),
+                      child: const Text('No, Cancel',
+                          style: TextStyle(
+                              fontWeight: FontWeight.w600)),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: () => Navigator.pop(context, true),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF2563EB),
+                        foregroundColor: Colors.white,
+                        padding:
+                            const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8)),
+                        elevation: 0,
+                      ),
+                      child: const Text('Yes, Continue',
+                          style: TextStyle(
+                              fontWeight: FontWeight.w600)),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      );
+
+      if (!mounted || proceed != true) return;
+
+      _nameController.text = '$companyName (1)';
+    }
+
+    await _submitReseller();
   }
 
   Future<void> _submitReseller() async {
@@ -210,7 +342,12 @@ class _AddResellerScreenState extends State<AddResellerScreen> {
                               width: 20,
                               child: Column(
                                 children: [
-                                  _StepDot(active: i <= _step),
+                                  GestureDetector(
+                                    onTap: i < _step
+                                        ? () => setState(() => _step = i)
+                                        : null,
+                                    child: _StepDot(active: i <= _step),
+                                  ),
                                   if (!isLast)
                                     Expanded(
                                       child: Center(
@@ -248,7 +385,7 @@ class _AddResellerScreenState extends State<AddResellerScreen> {
               const SizedBox(height: 12),
               SizedBox(
                 width: double.infinity,
-                height: 48,
+                height: 52,
                 child: ElevatedButton(
                   onPressed: _next,
                   style: ElevatedButton.styleFrom(
@@ -259,7 +396,7 @@ class _AddResellerScreenState extends State<AddResellerScreen> {
                         _step == 2 ? Colors.black87 : Colors.white,
                     elevation: 0,
                     shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8)),
+                        borderRadius: BorderRadius.circular(12)),
                   ),
                   child: Text(
                     _step == 2 ? 'Submit' : 'Next',
@@ -327,6 +464,8 @@ class _AddResellerScreenState extends State<AddResellerScreen> {
                 controller: _phoneController,
                 hint: 'Phone No.',
                 keyboardType: TextInputType.phone,
+                maxLength: 11,
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                 validator: (v) {
                   if (v == null || v.trim().isEmpty)
                     return 'Phone number is required';
@@ -364,17 +503,22 @@ class _AddResellerScreenState extends State<AddResellerScreen> {
     required String hint,
     TextInputType keyboardType = TextInputType.text,
     int maxLines = 1,
+    int? maxLength,
+    List<TextInputFormatter>? inputFormatters,
     String? Function(String?)? validator,
   }) {
     return TextFormField(
       controller: controller,
       keyboardType: keyboardType,
       maxLines: maxLines,
+      maxLength: maxLength,
+      inputFormatters: inputFormatters,
       validator: validator,
       style: const TextStyle(fontSize: 13, color: Colors.black87),
       decoration: InputDecoration(
         hintText: hint,
         hintStyle: TextStyle(fontSize: 13, color: Colors.grey[400]),
+        counterText: '',
         contentPadding:
             const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
         border: OutlineInputBorder(

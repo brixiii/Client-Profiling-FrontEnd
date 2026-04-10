@@ -247,7 +247,7 @@ class _DashboardScreenState extends State<DashboardScreen>
       backgroundColor: const Color(0xFFF5F7FA),
       appBar: CustomAppBar(
         title: 'Dashboard',
-        showMenuButton: true,
+        showMenuButton: true, 
         actions: [
           // Notification icon
           IconButton(

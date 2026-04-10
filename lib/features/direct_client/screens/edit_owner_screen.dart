@@ -128,11 +128,11 @@ class _EditOwnerScreenState extends State<EditOwnerScreen> {
     });
 
     final payload = <String, dynamic>{
-      'cfirstname': _firstNameController.text.trim(),
+      'cfirstname': _toTitleCase(_firstNameController.text),
       'cmiddlename': _middleNameController.text.trim().isEmpty
           ? null
-          : _middleNameController.text.trim(),
-      'csurname': _lastNameController.text.trim(),
+          : _toTitleCase(_middleNameController.text),
+      'csurname': _toTitleCase(_lastNameController.text),
       'ccompanyname': _companyName,
       'cemail': _emailController.text.trim().isEmpty
           ? null
@@ -150,7 +150,7 @@ class _EditOwnerScreenState extends State<EditOwnerScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Owner updated successfully.')),
       );
-      Navigator.pop(context);
+      Navigator.pop(context, true);
     } on ApiException catch (e) {
       if (!mounted) return;
       setState(() {
@@ -200,14 +200,17 @@ class _EditOwnerScreenState extends State<EditOwnerScreen> {
                     ),
                     const SizedBox(height: 10),
                   ],
-                  _buildField('Full Name', _firstNameController,
-                      hint: 'Enter first name'),
+                  _buildField('First Name', _firstNameController,
+                      hint: 'Enter first name',
+                      textCapitalization: TextCapitalization.words),
                   const SizedBox(height: 16),
                   _buildField('Middle name', _middleNameController,
-                      hint: 'Enter Middle Name (Optional)'),
+                      hint: 'Enter Middle Name (Optional)',
+                      textCapitalization: TextCapitalization.words),
                   const SizedBox(height: 16),
                   _buildField('Last Name', _lastNameController,
-                      hint: 'Enter last name'),
+                      hint: 'Enter last name',
+                      textCapitalization: TextCapitalization.words),
                   const SizedBox(height: 16),
                   _buildField('Email Address', _emailController,
                       hint: 'Enter email address',
@@ -269,9 +272,150 @@ class _EditOwnerScreenState extends State<EditOwnerScreen> {
                     ],
                   ),
                 );
-                if (confirmed == true) {
-                  await _saveClient();
+              if (confirmed == true) {
+                // Duplicate name check — exclude self
+                final firstName =
+                    _toTitleCase(_firstNameController.text);
+                final lastName =
+                    _toTitleCase(_lastNameController.text);
+
+                Map<String, dynamic> dupData;
+                try {
+                  dupData = await _api.checkClientDuplicate(
+                      firstName: firstName, lastName: lastName);
+                } catch (_) {
+                  dupData = {'exists': false};
                 }
+
+                final clients = (dupData['clients'] as List? ?? []);
+                final isActualDuplicate = clients.any((c) =>
+                    c['id']?.toString() != _clientId?.toString());
+
+                if (isActualDuplicate && mounted) {
+                  final fullName = '$firstName $lastName';
+                  final proceed = await showDialog<bool>(
+                    context: context,
+                    barrierDismissible: false,
+                    builder: (_) => AlertDialog(
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16)),
+                      contentPadding:
+                          const EdgeInsets.fromLTRB(24, 28, 24, 16),
+                      content: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            width: 64,
+                            height: 64,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                  color: const Color(0xFFFFC300),
+                                  width: 2.5),
+                            ),
+                            child: const Icon(
+                                Icons.warning_amber_rounded,
+                                color: Color(0xFFFFC300),
+                                size: 36),
+                          ),
+                          const SizedBox(height: 16),
+                          const Text(
+                            'Duplicate Name Found',
+                            style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w700,
+                                color: Colors.black87),
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 12),
+                          RichText(
+                            textAlign: TextAlign.center,
+                            text: TextSpan(
+                              style: const TextStyle(
+                                  fontSize: 14,
+                                  color: Colors.black54,
+                                  height: 1.5),
+                              children: [
+                                const TextSpan(
+                                    text:
+                                        'There is an existing client with the name '),
+                                TextSpan(
+                                  text: '"$fullName"',
+                                  style: const TextStyle(
+                                      fontWeight: FontWeight.w700,
+                                      color: Colors.black87),
+                                ),
+                                const TextSpan(
+                                    text:
+                                        '.\n\nWould you like to continue? The name will be saved as '),
+                                TextSpan(
+                                  text: '"$fullName (1)"',
+                                  style: const TextStyle(
+                                      fontWeight: FontWeight.w700,
+                                      color: Colors.black87),
+                                ),
+                                const TextSpan(text: '.'),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 24),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: OutlinedButton(
+                                  onPressed: () =>
+                                      Navigator.pop(context, false),
+                                  style: OutlinedButton.styleFrom(
+                                    foregroundColor:
+                                        const Color(0xFFEF4444),
+                                    side: const BorderSide(
+                                        color: Color(0xFFEF4444)),
+                                    padding: const EdgeInsets.symmetric(
+                                        vertical: 12),
+                                    shape: RoundedRectangleBorder(
+                                        borderRadius:
+                                            BorderRadius.circular(8)),
+                                  ),
+                                  child: const Text('No, Cancel',
+                                      style: TextStyle(
+                                          fontWeight: FontWeight.w600)),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: ElevatedButton(
+                                  onPressed: () =>
+                                      Navigator.pop(context, true),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor:
+                                        const Color(0xFF2563EB),
+                                    foregroundColor: Colors.white,
+                                    padding: const EdgeInsets.symmetric(
+                                        vertical: 12),
+                                    shape: RoundedRectangleBorder(
+                                        borderRadius:
+                                            BorderRadius.circular(8)),
+                                    elevation: 0,
+                                  ),
+                                  child: const Text('Yes, Continue',
+                                      style: TextStyle(
+                                          fontWeight: FontWeight.w600)),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+
+                  if (!mounted || proceed != true) return;
+                  // Append (1) suffix so the name is distinguishable
+                  _firstNameController.text = '$firstName (1)';
+                }
+
+                await _saveClient();
+              }
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFFFFC300),
@@ -305,6 +449,7 @@ class _EditOwnerScreenState extends State<EditOwnerScreen> {
     int maxLines = 1,
     List<TextInputFormatter>? inputFormatters,
     int? maxLength,
+    TextCapitalization textCapitalization = TextCapitalization.none,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -324,6 +469,7 @@ class _EditOwnerScreenState extends State<EditOwnerScreen> {
           maxLines: maxLines,
           inputFormatters: inputFormatters,
           maxLength: maxLength,
+          textCapitalization: textCapitalization,
           style: const TextStyle(fontSize: 14, color: Colors.black87),
           decoration: InputDecoration(
             hintText: hint,
@@ -355,7 +501,7 @@ class _EditOwnerScreenState extends State<EditOwnerScreen> {
 
   String _toBackendKey(String label) {
     switch (label) {
-      case 'Full Name':
+      case 'First Name':
         return 'cfirstname';
       case 'Middle name':
         return 'cmiddlename';
@@ -395,6 +541,13 @@ class _EditOwnerScreenState extends State<EditOwnerScreen> {
     }
 
     return errors;
+  }
+
+  String _toTitleCase(String text) {
+    return text.trim().split(RegExp(r'\s+')).map((word) {
+      if (word.isEmpty) return word;
+      return word[0].toUpperCase() + word.substring(1).toLowerCase();
+    }).join(' ');
   }
 
   bool _isValidEmail(String email) {
